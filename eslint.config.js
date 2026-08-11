@@ -19,4 +19,14 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: [
+      'src/components/common/ConfirmDialog.tsx',
+      'src/components/ui/**/*.tsx',
+      'src/hooks/use-auth.tsx',
+    ],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
