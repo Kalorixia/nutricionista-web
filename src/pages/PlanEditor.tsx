@@ -1,38 +1,71 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, Loader2, Plus, Sparkles, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Loader2,
+  Plus,
+  RefreshCw,
+  ShoppingCart,
+  Search,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useConfirm } from "@/components/common/ConfirmDialog"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { recipesService } from "@/services/recipes.service"
-import type { DiaPlan, MealPlan } from "@/types/mealPlan"
-import type { Recipe } from "@/types/recipe"
+import { ApiError } from "@/services/http"
+import { DIAS_SEMANA, MOMENTOS_COMIDA } from "@/types/mealPlan"
+import type {
+  ListaCompra,
+  PlanificacionDetalle,
+  PlanificacionRecetaItem,
+} from "@/types/mealPlan"
+import type { RecetaListItem } from "@/types/recipe"
+
+const SEARCH_DEBOUNCE_MS = 350
+const SEARCH_LIMIT = 8
+
+const ESTADO_LABEL: Record<PlanificacionDetalle["estado"], string> = {
+  borrador: "Borrador",
+  publicada: "Publicada",
+  archivada: "Archivada",
+}
 
 export default function PlanEditor() {
   const { id } = useParams<{ id: string }>()
-  const confirm = useConfirm()
+  const idPlan = Number(id)
 
-  const [plan, setPlan] = useState<MealPlan | null>(null)
-  const [dias, setDias] = useState<DiaPlan[]>([])
-  const [recetasPorId, setRecetasPorId] = useState<Map<string, Recipe>>(
-    new Map()
-  )
-  const [catalogo, setCatalogo] = useState<Recipe[]>([])
+  const [plan, setPlan] = useState<PlanificacionDetalle | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [generating, setGenerating] = useState(false)
-  const [picker, setPicker] = useState<{ dia: string; slot: string } | null>(
+  const [notFound, setNotFound] = useState(false)
+
+  const [picker, setPicker] = useState<{ dia: string; momento: string } | null>(
     null
   )
+  const [query, setQuery] = useState("")
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  const [results, setResults] = useState<RecetaListItem[]>([])
+  const [searching, setSearching] = useState(false)
+
+  const [shoppingOpen, setShoppingOpen] = useState(false)
+  const [shoppingList, setShoppingList] = useState<ListaCompra | null>(null)
+  const [shoppingLoading, setShoppingLoading] = useState(false)
+  const [generatingShopping, setGeneratingShopping] = useState(false)
+
+  const loadPlan = async () => {
+    const result = await mealPlansService.get(idPlan)
+    setPlan(result)
+  }
 
   useEffect(() => {
     if (!id) return
@@ -40,17 +73,9 @@ export default function PlanEditor() {
     void (async () => {
       setLoading(true)
       try {
-        const [loadedPlan, recetas] = await Promise.all([
-          mealPlansService.get(id),
-          recipesService.list(),
-        ])
-        if (cancelled) return
-        setPlan(loadedPlan)
-        setDias(loadedPlan.dias)
-        setCatalogo(recetas)
-        setRecetasPorId(new Map(recetas.map((r) => [r.id, r])))
+        await loadPlan()
       } catch {
-        if (!cancelled) toast.error("No se pudo cargar el plan")
+        if (!cancelled) setNotFound(true)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -58,79 +83,123 @@ export default function PlanEditor() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const addRecipe = (dia: string, slot: string, recetaId: string) => {
-    setDias((current) =>
-      current.map((d) =>
-        d.dia !== dia
-          ? d
-          : {
-              ...d,
-              comidas: {
-                ...d.comidas,
-                [slot]: [...(d.comidas[slot] ?? []), recetaId],
-              },
-            }
-      )
-    )
-    setPicker(null)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timeoutId)
+  }, [query])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!picker || !debouncedQuery) {
+      void (async () => {
+        setResults([])
+      })()
+      return
+    }
+    void (async () => {
+      setSearching(true)
+      try {
+        const result = await recipesService.list({
+          q: debouncedQuery,
+          limit: SEARCH_LIMIT,
+        })
+        if (!cancelled) setResults(result.recetas)
+      } finally {
+        if (!cancelled) setSearching(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedQuery, picker])
+
+  const openPicker = (dia: string, momento: string) => {
+    setPicker({ dia, momento })
+    setQuery("")
+    setDebouncedQuery("")
+    setResults([])
   }
 
-  const removeRecipe = (dia: string, slot: string, recetaId: string) => {
-    setDias((current) =>
-      current.map((d) =>
-        d.dia !== dia
-          ? d
-          : {
-              ...d,
-              comidas: {
-                ...d.comidas,
-                [slot]: (d.comidas[slot] ?? []).filter(
-                  (id) => id !== recetaId
-                ),
-              },
-            }
-      )
-    )
-  }
-
-  const handleSave = async () => {
-    if (!id) return
-    setSaving(true)
+  const handleAddRecipe = async (receta: RecetaListItem) => {
+    if (!picker) return
     try {
-      await mealPlansService.update(id, dias)
-      toast.success("Cambios guardados")
+      await mealPlansService.addRecipe(idPlan, {
+        dia_semana: picker.dia,
+        momento_comida: picker.momento,
+        id_receta: receta.id_receta,
+      })
+      await loadPlan()
+      setPicker(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    }
+  }
+
+  const handleRemoveRecipe = async (idPlanificacionReceta: number) => {
+    try {
+      await mealPlansService.removeRecipe(idPlan, idPlanificacionReceta)
+      await loadPlan()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    }
+  }
+
+  const openShoppingList = async () => {
+    setShoppingOpen(true)
+    setShoppingLoading(true)
+    try {
+      setShoppingList(await mealPlansService.getShoppingList(idPlan))
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        setShoppingList(null)
+      } else {
+        toast.error("No se pudo cargar la lista de compras")
+      }
+    } finally {
+      setShoppingLoading(false)
+    }
+  }
+
+  const handleGenerateShoppingList = async () => {
+    setGeneratingShopping(true)
+    try {
+      setShoppingList(await mealPlansService.generateShoppingList(idPlan))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Ocurrió un error")
     } finally {
-      setSaving(false)
+      setGeneratingShopping(false)
     }
   }
 
-  const handleGenerateAI = async () => {
-    const ok = await confirm({
-      title: "¿Generar plan con IA?",
-      description:
-        "Esto va a reemplazar las recetas asignadas en todos los días. (Función de demostración: la generación real todavía no está conectada.)",
-      confirmText: "Generar",
-    })
-    if (!ok) return
-    setGenerating(true)
+  const handleToggleItem = async (idItem: number, comprado: boolean) => {
     try {
-      const nuevosDias = await mealPlansService.generateWithAI()
-      setDias(nuevosDias)
-      toast.success("Plan generado")
-    } finally {
-      setGenerating(false)
+      setShoppingList(
+        await mealPlansService.toggleShoppingItem(idPlan, idItem, comprado)
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
     }
   }
+
+  const grid = useMemo(() => {
+    const map = new Map<string, PlanificacionRecetaItem[]>()
+    for (const item of plan?.recetas ?? []) {
+      const key = `${item.dia_semana}|${item.momento_comida}`
+      const arr = map.get(key) ?? []
+      arr.push(item)
+      map.set(key, arr)
+    }
+    return map
+  }, [plan])
 
   if (loading) {
     return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
   }
 
-  if (!plan) {
+  if (notFound || !plan) {
     return (
       <div className="space-y-4">
         <p className="text-muted-foreground">Plan no encontrado.</p>
@@ -154,78 +223,67 @@ export default function PlanEditor() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-brand-dark font-heading text-3xl font-bold">
-            {plan.nombre}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-brand-dark font-heading text-3xl font-bold">
+              {plan.nombre}
+            </h1>
+            <Badge variant="secondary">{ESTADO_LABEL[plan.estado]}</Badge>
+          </div>
           <p className="text-muted-foreground">
-            {plan.objetivo || "Sin objetivo"}
+            {plan.nombre_paciente}
+            {plan.descripcion ? ` · ${plan.descripcion}` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleGenerateAI}
-            disabled={generating}
-            className="gap-1.5"
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            Generar con IA
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Guardar cambios
-          </Button>
-        </div>
+        <Button variant="outline" onClick={openShoppingList} className="gap-1.5">
+          <ShoppingCart className="h-4 w-4" /> Lista de compras
+        </Button>
       </div>
 
       <div className="space-y-4">
-        {dias.map((dia) => (
-          <Card key={dia.dia} className="p-4">
-            <h2 className="mb-3 font-heading text-sm font-semibold">
-              {dia.dia}
-            </h2>
+        {DIAS_SEMANA.map((dia) => (
+          <Card key={dia} className="p-4">
+            <h2 className="mb-3 font-heading text-sm font-semibold">{dia}</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {plan.slots.map((slot) => (
-                <div
-                  key={slot.id}
-                  className="rounded-xl border border-border p-3"
-                >
-                  <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">
-                    {slot.nombre}
-                  </p>
-                  <div className="mb-2 flex flex-wrap gap-1.5">
-                    {(dia.comidas[slot.id] ?? []).map((recetaId) => (
-                      <Badge
-                        key={recetaId}
-                        variant="secondary"
-                        className="gap-1 pr-1"
-                      >
-                        {recetasPorId.get(recetaId)?.titulo ?? recetaId}
-                        <button
-                          onClick={() =>
-                            removeRecipe(dia.dia, slot.id, recetaId)
-                          }
-                          className="rounded-full p-0.5 hover:bg-secondary-foreground/10"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setPicker({ dia: dia.dia, slot: slot.id })}
-                    className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+              {MOMENTOS_COMIDA.map((momento) => {
+                const items = grid.get(`${dia}|${momento}`) ?? []
+                return (
+                  <div
+                    key={momento}
+                    className="rounded-xl border border-border p-3"
                   >
-                    <Plus className="h-3 w-3" /> Agregar receta
-                  </Button>
-                </div>
-              ))}
+                    <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">
+                      {momento}
+                    </p>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {items.map((item) => (
+                        <Badge
+                          key={item.id_planificacion_receta}
+                          variant="secondary"
+                          className="gap-1 pr-1"
+                        >
+                          {item.receta.nombre}
+                          <button
+                            onClick={() =>
+                              handleRemoveRecipe(item.id_planificacion_receta)
+                            }
+                            className="rounded-full p-0.5 hover:bg-secondary-foreground/10"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openPicker(dia, momento)}
+                      className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                    >
+                      <Plus className="h-3 w-3" /> Agregar receta
+                    </Button>
+                  </div>
+                )
+              })}
             </div>
           </Card>
         ))}
@@ -234,19 +292,110 @@ export default function PlanEditor() {
       <Dialog open={!!picker} onOpenChange={(o) => !o && setPicker(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Elegir receta</DialogTitle>
+            <DialogTitle>
+              Agregar receta — {picker?.dia} / {picker?.momento}
+            </DialogTitle>
           </DialogHeader>
-          <div className="max-h-80 space-y-1 overflow-y-auto">
-            {catalogo.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => picker && addRecipe(picker.dia, picker.slot, r.id)}
-                className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
-              >
-                {r.titulo}
-              </button>
-            ))}
+          <div className="relative">
+            <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nombre…"
+              className="rounded-xl pl-9"
+              autoFocus
+            />
           </div>
+          <div className="max-h-72 space-y-1 overflow-y-auto">
+            {searching ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              results.map((r) => (
+                <button
+                  key={r.id_receta}
+                  onClick={() => handleAddRecipe(r)}
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
+                >
+                  {r.nombre}
+                </button>
+              ))
+            )}
+            {!searching && debouncedQuery && results.length === 0 && (
+              <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                No encontramos recetas para esa búsqueda.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shoppingOpen} onOpenChange={setShoppingOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Lista de compras</DialogTitle>
+          </DialogHeader>
+          {shoppingLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : !shoppingList ? (
+            <div className="space-y-3 text-center">
+              <p className="text-sm text-muted-foreground">
+                Todavía no generaste la lista de compras para este plan.
+              </p>
+              <Button
+                onClick={handleGenerateShoppingList}
+                disabled={generatingShopping}
+                className="gap-1.5"
+              >
+                {generatingShopping ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingCart className="h-4 w-4" />
+                )}
+                Generar
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="max-h-80 space-y-1 overflow-y-auto">
+                {shoppingList.items.map((item) => (
+                  <label
+                    key={item.id_item}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-secondary"
+                  >
+                    <Checkbox
+                      checked={item.comprado}
+                      onCheckedChange={(checked) =>
+                        handleToggleItem(item.id_item, checked === true)
+                      }
+                    />
+                    <span className={item.comprado ? "text-muted-foreground line-through" : ""}>
+                      {item.nombre}
+                    </span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {item.cantidad ?? ""} {item.unidad ?? ""}
+                    </span>
+                  </label>
+                ))}
+                {shoppingList.items.length === 0 && (
+                  <p className="p-2 text-center text-sm text-muted-foreground">
+                    El plan todavía no tiene recetas con ingredientes.
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateShoppingList}
+                disabled={generatingShopping}
+                className="w-full gap-1.5"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${generatingShopping ? "animate-spin" : ""}`}
+                />
+                Regenerar
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

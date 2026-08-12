@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Loader2, Unlink } from "lucide-react"
+import {
+  ArrowLeft,
+  ClipboardList,
+  Construction,
+  Loader2,
+  Plus,
+  Unlink,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useConfirm } from "@/components/common/ConfirmDialog"
 import { patientsService } from "@/services/patients.service"
+import { mealPlansService } from "@/services/mealPlans.service"
 import { formatDate } from "@/utils/format"
+import { isNotImplemented } from "@/utils/errors"
 import type { PacienteDetalle } from "@/types/patient"
+import type { Planificacion } from "@/types/mealPlan"
 
 function calcularEdad(fechaNacimiento: string): number {
   const nacimiento = new Date(fechaNacimiento)
@@ -30,6 +40,10 @@ export default function PatientDetail() {
   const [paciente, setPaciente] = useState<PacienteDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [notImplemented, setNotImplemented] = useState(false)
+
+  const [planes, setPlanes] = useState<Planificacion[]>([])
+  const [loadingPlanes, setLoadingPlanes] = useState(true)
 
   useEffect(() => {
     if (!id) return
@@ -39,10 +53,32 @@ export default function PatientDetail() {
       try {
         const result = await patientsService.obtenerPaciente(Number(id))
         if (!cancelled) setPaciente(result)
-      } catch {
-        if (!cancelled) setNotFound(true)
+      } catch (error) {
+        if (cancelled) return
+        if (isNotImplemented(error)) setNotImplemented(true)
+        else setNotFound(true)
       } finally {
         if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    void (async () => {
+      setLoadingPlanes(true)
+      try {
+        const result = await mealPlansService.list(Number(id))
+        if (!cancelled) setPlanes(result)
+      } catch {
+        // El listado de planes es un agregado secundario en esta pantalla;
+        // si falla, no bloqueamos el resto del detalle del paciente.
+      } finally {
+        if (!cancelled) setLoadingPlanes(false)
       }
     })()
     return () => {
@@ -69,6 +105,20 @@ export default function PatientDetail() {
 
   if (loading) {
     return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+  }
+
+  if (notImplemented) {
+    return (
+      <div className="space-y-4">
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Construction className="h-4 w-4" /> El detalle de pacientes
+          todavía está en desarrollo en el backend.
+        </p>
+        <Button variant="outline" render={<Link to="/pacientes" />}>
+          Volver a pacientes
+        </Button>
+      </div>
+    )
   }
 
   if (notFound || !paciente) {
@@ -102,13 +152,21 @@ export default function PatientDetail() {
             Vinculado desde {formatDate(paciente.fecha_inicio)}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          onClick={handleDesvincular}
-          className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Unlink className="h-4 w-4" /> Desvincular
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            render={<Link to={`/planificacion?paciente=${paciente.id_paciente}`} />}
+            className="gap-1.5"
+          >
+            <Plus className="h-4 w-4" /> Crear plan
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleDesvincular}
+            className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Unlink className="h-4 w-4" /> Desvincular
+          </Button>
+        </div>
       </div>
 
       <Card className="grid grid-cols-2 gap-4 p-5 text-sm">
@@ -178,6 +236,40 @@ export default function PatientDetail() {
           </div>
         </div>
       </Card>
+
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground">
+          Planes de alimentación
+        </h2>
+        {loadingPlanes ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : (
+          <Card className="divide-y divide-border">
+            {planes.map((plan) => (
+              <Link
+                key={plan.id_planificacion}
+                to={`/planificacion/${plan.id_planificacion}`}
+                className="flex items-center gap-3 p-4 hover:bg-secondary/50"
+              >
+                <div className="rounded-full bg-secondary p-2">
+                  <ClipboardList className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{plan.nombre}</p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {plan.estado} · {plan.cantidad_recetas} recetas
+                  </p>
+                </div>
+              </Link>
+            ))}
+            {planes.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                Todavía no le creaste ningún plan.
+              </p>
+            )}
+          </Card>
+        )}
+      </div>
     </div>
   )
 }

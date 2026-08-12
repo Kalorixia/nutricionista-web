@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
-import { CheckCircle2, Loader2, Plus, Send, Undo2 } from "lucide-react"
+import { Link, useSearchParams } from "react-router-dom"
+import { Archive, Loader2, Plus, Send } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -17,34 +18,34 @@ import {
 import { useConfirm } from "@/components/common/ConfirmDialog"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { patientsService } from "@/services/patients.service"
-import type { EstadoPlan, MealPlan } from "@/types/mealPlan"
+import type { EstadoPlanificacion, Planificacion } from "@/types/mealPlan"
 import type { PacienteVinculado } from "@/types/patient"
 
-const ESTADO_LABEL: Record<EstadoPlan, string> = {
+const ESTADO_LABEL: Record<EstadoPlanificacion, string> = {
   borrador: "Borrador",
-  aprobada: "Aprobada",
   publicada: "Publicada",
+  archivada: "Archivada",
 }
 
-const ESTADO_VARIANT: Record<EstadoPlan, "secondary" | "default"> = {
+const ESTADO_VARIANT: Record<EstadoPlanificacion, "secondary" | "default" | "outline"> = {
   borrador: "secondary",
-  aprobada: "secondary",
   publicada: "default",
+  archivada: "outline",
 }
 
 export default function Planning() {
   const confirm = useConfirm()
-  const [plans, setPlans] = useState<MealPlan[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const [plans, setPlans] = useState<Planificacion[]>([])
   const [loading, setLoading] = useState(true)
   const [pacientes, setPacientes] = useState<PacienteVinculado[]>([])
 
   const [creating, setCreating] = useState(false)
+  const [idPaciente, setIdPaciente] = useState("")
   const [nombre, setNombre] = useState("")
-  const [objetivo, setObjetivo] = useState("")
+  const [descripcion, setDescripcion] = useState("")
   const [saving, setSaving] = useState(false)
-
-  const [publishing, setPublishing] = useState<MealPlan | null>(null)
-  const [idPacienteElegido, setIdPacienteElegido] = useState<string>("")
 
   const load = async () => {
     setLoading(true)
@@ -65,83 +66,79 @@ export default function Planning() {
       .catch(() => {})
   }, [])
 
+  // Entrada desde PatientDetail.tsx: "Crear plan para este paciente".
+  useEffect(() => {
+    void (async () => {
+      const idParam = searchParams.get("paciente")
+      if (idParam) {
+        setIdPaciente(idParam)
+        setCreating(true)
+        setSearchParams({}, { replace: true })
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleCreate = async () => {
+    if (!idPaciente) {
+      toast.error("Elegí un paciente")
+      return
+    }
     if (!nombre.trim()) {
       toast.error("Ingresá un nombre para el plan")
       return
     }
     setSaving(true)
     try {
-      const plan = await mealPlansService.create(
-        nombre.trim(),
-        objetivo.trim()
-      )
+      await mealPlansService.create({
+        id_paciente: Number(idPaciente),
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim() || undefined,
+      })
       toast.success("Plan creado")
       setCreating(false)
+      setIdPaciente("")
       setNombre("")
-      setObjetivo("")
-      setPlans((current) => [plan, ...current])
+      setDescripcion("")
+      await load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async (plan: MealPlan) => {
+  const handleDelete = async (plan: Planificacion) => {
     const ok = await confirm({
       title: "¿Eliminar este plan?",
       description: `"${plan.nombre}" se va a eliminar permanentemente.`,
       confirmText: "Eliminar",
     })
     if (!ok) return
-    await mealPlansService.remove(plan.id)
-    setPlans((current) => current.filter((p) => p.id !== plan.id))
-  }
-
-  const handleApprove = async (plan: MealPlan) => {
-    try {
-      const updated = await mealPlansService.approve(plan.id)
-      setPlans((current) =>
-        current.map((p) => (p.id === updated.id ? updated : p))
-      )
-      toast.success("Plan aprobado")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
-    }
-  }
-
-  const openPublish = (plan: MealPlan) => {
-    setPublishing(plan)
-    setIdPacienteElegido("")
-  }
-
-  const doPublish = async () => {
-    if (!publishing || !idPacienteElegido) return
-    const paciente = pacientes.find(
-      (p) => String(p.id_paciente) === idPacienteElegido
-    )
-    if (!paciente) return
-    try {
-      const updated = await mealPlansService.publish(
-        publishing.id,
-        paciente.id_paciente,
-        `${paciente.nombre} ${paciente.apellido}`
-      )
-      setPlans((current) =>
-        current.map((p) => (p.id === updated.id ? updated : p))
-      )
-      toast.success(`Plan publicado para ${paciente.nombre}`)
-      setPublishing(null)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
-    }
-  }
-
-  const handleUnpublish = async (plan: MealPlan) => {
-    const updated = await mealPlansService.unpublish(plan.id)
+    await mealPlansService.remove(plan.id_planificacion)
     setPlans((current) =>
-      current.map((p) => (p.id === updated.id ? updated : p))
+      current.filter((p) => p.id_planificacion !== plan.id_planificacion)
     )
-    toast.success("Plan despublicado")
+  }
+
+  const handlePublish = async (plan: Planificacion) => {
+    try {
+      await mealPlansService.publish(plan.id_planificacion)
+      toast.success("Plan publicado")
+      await load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    }
+  }
+
+  const handleArchive = async (plan: Planificacion) => {
+    try {
+      await mealPlansService.archive(plan.id_planificacion)
+      toast.success("Plan archivado")
+      await load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    }
   }
 
   return (
@@ -152,7 +149,7 @@ export default function Planning() {
             Planificación
           </h1>
           <p className="text-muted-foreground">
-            Creá, aprobá y publicá planes de alimentación para tus pacientes.
+            Creá y publicá planes de alimentación para tus pacientes.
           </p>
         </div>
         <Button onClick={() => setCreating(true)} className="gap-1.5">
@@ -165,17 +162,16 @@ export default function Planning() {
       ) : (
         <Card className="divide-y divide-border">
           {plans.map((plan) => (
-            <div key={plan.id} className="flex items-center gap-3 p-4">
+            <div key={plan.id_planificacion} className="flex items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <Link
-                  to={`/planificacion/${plan.id}`}
+                  to={`/planificacion/${plan.id_planificacion}`}
                   className="truncate font-medium hover:underline"
                 >
                   {plan.nombre}
                 </Link>
                 <p className="truncate text-xs text-muted-foreground">
-                  {plan.objetivo || "Sin objetivo"} ·{" "}
-                  {plan.nombre_paciente ?? "Sin publicar"}
+                  {plan.nombre_paciente} · {plan.cantidad_recetas} recetas
                 </p>
               </div>
               <Badge variant={ESTADO_VARIANT[plan.estado]}>
@@ -185,17 +181,7 @@ export default function Planning() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleApprove(plan)}
-                  className="gap-1 rounded-xl"
-                >
-                  <CheckCircle2 className="h-4 w-4" /> Aprobar
-                </Button>
-              )}
-              {plan.estado === "aprobada" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openPublish(plan)}
+                  onClick={() => handlePublish(plan)}
                   className="gap-1 rounded-xl"
                 >
                   <Send className="h-4 w-4" /> Publicar
@@ -205,10 +191,10 @@ export default function Planning() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleUnpublish(plan)}
+                  onClick={() => handleArchive(plan)}
                   className="gap-1 rounded-xl"
                 >
-                  <Undo2 className="h-4 w-4" /> Despublicar
+                  <Archive className="h-4 w-4" /> Archivar
                 </Button>
               )}
               <Button
@@ -236,15 +222,36 @@ export default function Planning() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Nombre</Label>
+              <Label>Paciente</Label>
+              <select
+                value={idPaciente}
+                onChange={(e) => setIdPaciente(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+              >
+                <option value="">Seleccioná un paciente</option>
+                {pacientes.map((p) => (
+                  <option key={p.id_paciente} value={p.id_paciente}>
+                    {p.nombre} {p.apellido}
+                  </option>
+                ))}
+              </select>
+              {pacientes.length === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Todavía no tenés pacientes vinculados.
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Nombre del plan</Label>
               <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
             </div>
             <div>
-              <Label>Objetivo</Label>
-              <Input
-                value={objetivo}
-                onChange={(e) => setObjetivo(e.target.value)}
-                placeholder="Ej: Bajar de peso"
+              <Label>Descripción (opcional)</Label>
+              <Textarea
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                placeholder="Ej: Bajar de peso, primera consulta"
+                className="min-h-[70px]"
               />
             </div>
           </div>
@@ -254,45 +261,6 @@ export default function Planning() {
             </Button>
             <Button onClick={handleCreate} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!publishing}
-        onOpenChange={(o) => !o && setPublishing(null)}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Publicar plan</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Label>Elegí a quién publicárselo</Label>
-            <select
-              value={idPacienteElegido}
-              onChange={(e) => setIdPacienteElegido(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background p-2 text-sm"
-            >
-              <option value="">Seleccioná un paciente</option>
-              {pacientes.map((p) => (
-                <option key={p.id_paciente} value={p.id_paciente}>
-                  {p.nombre} {p.apellido}
-                </option>
-              ))}
-            </select>
-            {pacientes.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Todavía no tenés pacientes vinculados.
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPublishing(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={doPublish} disabled={!idPacienteElegido}>
-              Publicar
             </Button>
           </DialogFooter>
         </DialogContent>

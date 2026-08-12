@@ -1,42 +1,96 @@
 import { useEffect, useState } from "react"
-import { CalendarRange, Loader2, Users, Zap } from "lucide-react"
+import {
+  CalendarRange,
+  Construction,
+  Loader2,
+  Users,
+  Zap,
+} from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/hooks/use-auth"
 import { patientsService } from "@/services/patients.service"
 import { mealPlansService } from "@/services/mealPlans.service"
-import { dashboardService } from "@/services/dashboard.service"
+import { nutritionistService, type ActividadItem } from "@/services/nutritionist.service"
 import { formatDateTime } from "@/utils/format"
-import type { ActivityItem } from "@/services/mocks/dashboard.mock"
+import { isNotImplemented } from "@/utils/errors"
+
+/** "dev" = el endpoint real todavía no está implementado (backend 501). */
+type StatValue = number | "dev" | "error"
 
 interface Stats {
-  pacientes: number
-  codigosActivos: number
-  planesPublicados: number
+  pacientes: StatValue
+  codigosActivos: StatValue
+  planesPublicados: StatValue
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Users
+  label: string
+  value: StatValue
+}) {
+  return (
+    <Card className="flex items-center gap-3 p-5">
+      <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        {value === "dev" ? (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Construction className="h-3.5 w-3.5" /> En desarrollo
+          </p>
+        ) : value === "error" ? (
+          <p className="text-xs text-destructive">No se pudo cargar</p>
+        ) : (
+          <p className="text-2xl font-bold">{value}</p>
+        )}
+        <p className="text-sm text-muted-foreground">{label}</p>
+      </div>
+    </Card>
+  )
+}
+
+function resolveStat(result: PromiseSettledResult<number>): StatValue {
+  if (result.status === "fulfilled") return result.value
+  return isNotImplemented(result.reason) ? "dev" : "error"
 }
 
 export default function Dashboard() {
   const { user } = useAuth()
   const [stats, setStats] = useState<Stats | null>(null)
-  const [actividad, setActividad] = useState<ActivityItem[]>([])
+  const [actividad, setActividad] = useState<ActividadItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      patientsService.listarPacientes(),
-      patientsService.listarCodigos("activo"),
-      mealPlansService.list(),
-      dashboardService.recentActivity(),
-    ])
-      .then(([{ total }, codigos, planes, actividad]) => {
-        setStats({
-          pacientes: total,
-          codigosActivos: codigos.length,
-          planesPublicados: planes.filter((p) => p.estado === "publicada")
-            .length,
-        })
-        setActividad(actividad)
+    let cancelled = false
+    void (async () => {
+      setLoading(true)
+      const [pacientes, codigos, planes, actividadResult] =
+        await Promise.allSettled([
+          patientsService.listarPacientes().then((r) => r.total),
+          patientsService.listarCodigos("activo").then((r) => r.length),
+          mealPlansService
+            .list()
+            .then((r) => r.filter((p) => p.estado === "publicada").length),
+          nutritionistService.actividadReciente(),
+        ])
+      if (cancelled) return
+      setStats({
+        pacientes: resolveStat(pacientes),
+        codigosActivos: resolveStat(codigos),
+        planesPublicados: resolveStat(planes),
       })
-      .finally(() => setLoading(false))
+      setActividad(
+        actividadResult.status === "fulfilled" ? actividadResult.value : []
+      )
+      setLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (
@@ -54,37 +108,13 @@ export default function Dashboard() {
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card className="flex items-center gap-3 p-5">
-            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.pacientes}</p>
-              <p className="text-sm text-muted-foreground">
-                Pacientes vinculados
-              </p>
-            </div>
-          </Card>
-          <Card className="flex items-center gap-3 p-5">
-            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
-              <Zap className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.codigosActivos}</p>
-              <p className="text-sm text-muted-foreground">Códigos activos</p>
-            </div>
-          </Card>
-          <Card className="flex items-center gap-3 p-5">
-            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
-              <CalendarRange className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.planesPublicados}</p>
-              <p className="text-sm text-muted-foreground">
-                Planes publicados
-              </p>
-            </div>
-          </Card>
+          <StatCard icon={Users} label="Pacientes vinculados" value={stats.pacientes} />
+          <StatCard icon={Zap} label="Códigos activos" value={stats.codigosActivos} />
+          <StatCard
+            icon={CalendarRange}
+            label="Planes publicados"
+            value={stats.planesPublicados}
+          />
         </div>
       )}
 

@@ -1,33 +1,62 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Clock3, LogOut, XCircle } from "lucide-react"
+import { Clock3, LogOut, RefreshCw, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { nutritionistService } from "@/services/nutritionist.service"
 import KalorixiaLoader from "@/components/common/KalorixiaLoader"
 import type { EstadoMatriculaDetalle } from "@/types/auth"
 
+const POLL_MS = 15_000
+
 export default function Pending() {
-  const { signOut } = useAuth()
+  const { signOut, refreshMe } = useAuth()
   const navigate = useNavigate()
   const [detalle, setDetalle] = useState<EstadoMatriculaDetalle | null>(null)
   const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(false)
+  const cancelledRef = useRef(false)
+
+  // El estado puede haber cambiado en otra pestaña (un admin lo aprobó), así
+  // que además de mostrarlo acá sincronizamos la sesión: si ya está
+  // aprobada, refrescamos el usuario del contexto de auth (de donde lee
+  // RequireApprovedNutritionist) y entramos al portal sin pedir relogin.
+  const check = useCallback(async () => {
+    try {
+      const result = await nutritionistService.estadoMatricula()
+      if (cancelledRef.current) return
+      setDetalle(result)
+      if (result.estado === "aprobada") {
+        await refreshMe()
+        if (!cancelledRef.current) navigate("/", { replace: true })
+      }
+    } catch {
+      // Sesión inválida u otro error transitorio: se reintenta en el
+      // próximo poll, RequireAuth se encarga si la sesión realmente cayó.
+    }
+  }, [refreshMe, navigate])
 
   useEffect(() => {
-    let cancelled = false
-    nutritionistService
-      .estadoMatricula()
-      .then((result) => {
-        if (!cancelled) setDetalle(result)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    cancelledRef.current = false
+    void (async () => {
+      await check()
+      if (!cancelledRef.current) setLoading(false)
+    })()
+    const interval = setInterval(check, POLL_MS)
     return () => {
-      cancelled = true
+      cancelledRef.current = true
+      clearInterval(interval)
     }
-  }, [])
+  }, [check])
+
+  const handleCheckNow = async () => {
+    setChecking(true)
+    try {
+      await check()
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const handleSignOut = async () => {
     await signOut()
@@ -82,10 +111,22 @@ export default function Pending() {
               </p>
             )}
 
+            {!rechazada && (
+              <Button
+                variant="outline"
+                onClick={handleCheckNow}
+                disabled={checking}
+                className="mt-6 w-full gap-1.5"
+              >
+                <RefreshCw className={`size-4 ${checking ? "animate-spin" : ""}`} />
+                Ya me aprobaron, verificar ahora
+              </Button>
+            )}
+
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={handleSignOut}
-              className="mt-6 w-full gap-1.5"
+              className={`w-full gap-1.5 ${rechazada ? "mt-6" : "mt-2"}`}
             >
               <LogOut className="size-4" /> Cerrar sesión
             </Button>

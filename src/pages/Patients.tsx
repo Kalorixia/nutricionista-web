@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import {
+  Construction,
   Copy,
   Eye,
   Loader2,
+  QrCode,
   Search,
   Unlink,
   UserRound,
@@ -15,9 +17,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { useConfirm } from "@/components/common/ConfirmDialog"
+import CodigoVinculacionDialog from "@/components/modules/patients/CodigoVinculacionDialog"
 import { patientsService } from "@/services/patients.service"
 import { formatDate } from "@/utils/format"
+import { isNotImplemented } from "@/utils/errors"
 import type { CodigoVinculacion, PacienteVinculado } from "@/types/patient"
+
+function EnDesarrollo({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+      <Construction className="h-4 w-4" /> {children}
+    </p>
+  )
+}
 
 const ESTADO_LABEL: Record<CodigoVinculacion["estado"], string> = {
   activo: "Activo",
@@ -41,16 +53,25 @@ export default function Patients() {
 
   const [codigos, setCodigos] = useState<CodigoVinculacion[]>([])
   const [loadingCodigos, setLoadingCodigos] = useState(true)
+  const [codigosDev, setCodigosDev] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [viewingCodigo, setViewingCodigo] = useState<CodigoVinculacion | null>(
+    null
+  )
 
   const [pacientes, setPacientes] = useState<PacienteVinculado[]>([])
   const [loadingPacientes, setLoadingPacientes] = useState(true)
+  const [pacientesDev, setPacientesDev] = useState(false)
   const [query, setQuery] = useState("")
 
   const loadCodigos = async () => {
     setLoadingCodigos(true)
     try {
       setCodigos(await patientsService.listarCodigos())
+      setCodigosDev(false)
+    } catch (error) {
+      if (isNotImplemented(error)) setCodigosDev(true)
+      else throw error
     } finally {
       setLoadingCodigos(false)
     }
@@ -61,22 +82,35 @@ export default function Patients() {
     try {
       const { pacientes } = await patientsService.listarPacientes({ q })
       setPacientes(pacientes)
+      setPacientesDev(false)
+    } catch (error) {
+      if (isNotImplemented(error)) setPacientesDev(true)
+      else throw error
     } finally {
       setLoadingPacientes(false)
     }
   }
 
   useEffect(() => {
+    // Cada load atrapa su propio error de "no implementado"; lo que llegue
+    // hasta acá es un error real e inesperado.
     void (async () => {
-      await Promise.all([loadCodigos(), loadPacientes()])
+      await Promise.all([
+        loadCodigos().catch(() =>
+          toast.error("No se pudieron cargar los códigos")
+        ),
+        loadPacientes().catch(() =>
+          toast.error("No se pudieron cargar los pacientes")
+        ),
+      ])
     })()
   }, [])
 
   const handleGenerar = async () => {
     setGenerating(true)
     try {
-      await patientsService.generarCodigo()
-      toast.success("Código generado")
+      const codigo = await patientsService.generarCodigo()
+      setViewingCodigo(codigo)
       await loadCodigos()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Ocurrió un error")
@@ -152,6 +186,13 @@ export default function Patients() {
         </h2>
         {loadingCodigos ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : codigosDev ? (
+          <Card>
+            <EnDesarrollo>
+              La generación de códigos de vinculación todavía está en
+              desarrollo en el backend.
+            </EnDesarrollo>
+          </Card>
         ) : (
           <Card className="divide-y divide-border">
             {codigosActivos.map((c) => (
@@ -165,6 +206,14 @@ export default function Patients() {
                 <span className="flex-1 text-xs text-muted-foreground">
                   Vence el {formatDate(c.fecha_expiracion)}
                 </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setViewingCodigo(c)}
+                  className="gap-1 rounded-xl"
+                >
+                  <QrCode className="h-4 w-4" /> Ver QR
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
@@ -217,21 +266,31 @@ export default function Patients() {
         <h2 className="text-sm font-semibold text-foreground">
           Pacientes vinculados
         </h2>
-        <div className="relative max-w-md">
-          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              void loadPacientes(e.target.value || undefined)
-            }}
-            placeholder="Buscar por nombre…"
-            className="rounded-xl pl-9"
-          />
-        </div>
+
+        {!pacientesDev && (
+          <div className="relative max-w-md">
+            <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                void loadPacientes(e.target.value || undefined)
+              }}
+              placeholder="Buscar por nombre…"
+              className="rounded-xl pl-9"
+            />
+          </div>
+        )}
 
         {loadingPacientes ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : pacientesDev ? (
+          <Card>
+            <EnDesarrollo>
+              La lista de pacientes vinculados todavía está en desarrollo en
+              el backend.
+            </EnDesarrollo>
+          </Card>
         ) : (
           <Card className="divide-y divide-border">
             {pacientes.map((p) => (
@@ -273,6 +332,11 @@ export default function Patients() {
           </Card>
         )}
       </section>
+
+      <CodigoVinculacionDialog
+        codigo={viewingCodigo}
+        onClose={() => setViewingCodigo(null)}
+      />
     </div>
   )
 }

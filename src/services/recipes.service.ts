@@ -1,27 +1,44 @@
-// MOCK — ver services/mocks/recipes.mock.ts para el detalle de qué falta
-// en el backend real.
-import { recipes } from "@/services/mocks/recipes.mock"
-import { delay } from "@/services/mockUtils"
-import type { Recipe } from "@/types/recipe"
+import { authedFetch } from "@/services/http"
+import type {
+  Categoria,
+  ListaRecetasResponse,
+  RecetaDetalle,
+  RecetaListItem,
+} from "@/types/recipe"
+
+interface ListaCategoriasResponse {
+  categorias: Categoria[]
+}
 
 export const recipesService = {
-  async list(query?: string): Promise<Recipe[]> {
-    const q = query?.trim().toLowerCase()
-    const filtered = q
-      ? recipes.filter(
-          (r) =>
-            r.titulo.toLowerCase().includes(q) ||
-            r.tags.some((tag) => tag.toLowerCase().includes(q))
-        )
-      : recipes
-    return delay(filtered)
+  /**
+   * Sin `limit`, devuelve el catálogo completo sin paginar (para selectores
+   * que necesitan todas las recetas, ej. el picker de planificación). Los
+   * listados navegables deben pasar `limit`/`offset`.
+   */
+  async list(
+    params: { q?: string; limit?: number; offset?: number } = {}
+  ): Promise<ListaRecetasResponse> {
+    const search = new URLSearchParams()
+    if (params.q) search.set("q", params.q)
+    if (params.limit) search.set("limit", String(params.limit))
+    if (params.offset) search.set("offset", String(params.offset))
+    const qs = search.toString() ? `?${search.toString()}` : ""
+    return authedFetch<ListaRecetasResponse>(`/recetas${qs}`)
   },
 
-  async get(id: string): Promise<Recipe | undefined> {
-    return delay(recipes.find((r) => r.id === id))
+  async get(id: number): Promise<RecetaDetalle> {
+    return authedFetch<RecetaDetalle>(`/recetas/${id}`)
   },
 
-  async byIds(ids: string[]): Promise<Recipe[]> {
-    return delay(recipes.filter((r) => ids.includes(r.id)))
+  async listCategorias(): Promise<Categoria[]> {
+    const { categorias } =
+      await authedFetch<ListaCategoriasResponse>("/recetas/categorias")
+    return categorias
+  },
+
+  async byIds(ids: number[]): Promise<RecetaListItem[]> {
+    const { recetas } = await this.list()
+    return recetas.filter((r) => ids.includes(r.id_receta))
   },
 }
