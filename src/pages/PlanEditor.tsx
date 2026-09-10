@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import {
   ArrowLeft,
@@ -10,6 +10,8 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useConfirm } from "@/components/common/ConfirmDialog"
+import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -42,12 +44,19 @@ const ESTADO_LABEL: Record<PlanificacionDetalle["estado"], string> = {
 }
 
 export default function PlanEditor() {
+  const confirm = useConfirm()
   const { id } = useParams<{ id: string }>()
   const idPlan = Number(id)
 
   const [plan, setPlan] = useState<PlanificacionDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [load_error, set_load_error] = useState<string | null>(null)
+  const [reload, set_reload] = useState(0)
+  const [busy, set_busy] = useState(false)
+  const busy_ref = useRef(false)
+  const active_id = useRef(idPlan)
+  const read_only = plan?.estado !== "borrador"
 
   const [picker, setPicker] = useState<{ dia: string; momento: string } | null>(
     null
@@ -56,6 +65,7 @@ export default function PlanEditor() {
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [results, setResults] = useState<RecetaListItem[]>([])
   const [searching, setSearching] = useState(false)
+  const [search_error, set_search_error] = useState<string | null>(null)
 
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [shoppingList, setShoppingList] = useState<ListaCompra | null>(null)
@@ -64,18 +74,30 @@ export default function PlanEditor() {
 
   const loadPlan = async () => {
     const result = await mealPlansService.get(idPlan)
-    setPlan(result)
+    if (active_id.current === idPlan) setPlan(result)
   }
 
   useEffect(() => {
-    if (!id) return
+    active_id.current = idPlan
     let cancelled = false
     void (async () => {
       setLoading(true)
+      setPlan(null)
+      setNotFound(false)
+      set_load_error(null)
+      setPicker(null)
       try {
-        await loadPlan()
-      } catch {
-        if (!cancelled) setNotFound(true)
+        if (!Number.isSafeInteger(idPlan) || idPlan <= 0)
+          throw new ApiError("Plan no encontrado", 404)
+        const result = await mealPlansService.get(idPlan)
+        if (!cancelled) setPlan(result)
+      } catch (error) {
+        if (!cancelled) {
+          setNotFound(error instanceof ApiError && error.status === 404)
+          set_load_error(
+            error instanceof Error ? error.message : "No pudimos cargar el plan"
+          )
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -84,10 +106,13 @@ export default function PlanEditor() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, reload])
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS)
+    const timeoutId = setTimeout(
+      () => setDebouncedQuery(query),
+      SEARCH_DEBOUNCE_MS
+    )
     return () => clearTimeout(timeoutId)
   }, [query])
 
@@ -96,17 +121,27 @@ export default function PlanEditor() {
     if (!picker || !debouncedQuery) {
       void (async () => {
         setResults([])
+        setSearching(false)
+        set_search_error(null)
       })()
       return
     }
     void (async () => {
       setSearching(true)
+      set_search_error(null)
       try {
         const result = await recipesService.list({
           q: debouncedQuery,
           limit: SEARCH_LIMIT,
         })
         if (!cancelled) setResults(result.recetas)
+      } catch (error) {
+        if (!cancelled) {
+          setResults([])
+          set_search_error(
+            error instanceof Error ? error.message : "No pudimos buscar recetas"
+          )
+        }
       } finally {
         if (!cancelled) setSearching(false)
       }
@@ -117,34 +152,90 @@ export default function PlanEditor() {
   }, [debouncedQuery, picker])
 
   const openPicker = (dia: string, momento: string) => {
+    if (read_only || busy_ref.current) return
     setPicker({ dia, momento })
     setQuery("")
     setDebouncedQuery("")
     setResults([])
+    set_search_error(null)
   }
+
+  const mutate_plan = async (operation: () => Promise<void>) => {
+    if (busy_ref.current || read_only) return
+    busy_ref.current = true
+    set_busy(true)
+    try {
+      await operation()
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No pudimos guardar el cambio. Intentá nuevamente."
+      )
+      if (error instanceof ApiError && error.status === 409)
+        set_reload((value) => value + 1)
+    } finally {
+      busy_ref.current = false
+      set_busy(false)
+    }
+  }
+
+  const handle_publish = () =>
+    mutate_plan(async () => {
+      if (!plan) return
+      if (!plan.recetas.length) {
+        toast.error(
+          "El plan no tiene comidas. Agregá al menos una antes de publicar."
+        )
+        return
+      }
+      const approved = await confirm({
+        title: "¿Aprobar y publicar este plan?",
+        description: review_summary(plan).description,
+        confirmText: "Aprobar y publicar",
+        confirmClassName: "bg-primary text-primary-foreground",
+      })
+      if (!approved || active_id.current !== idPlan) return
+      const result = await mealPlansService.publish(idPlan)
+      if (active_id.current === idPlan) setPlan(result)
+      toast.success("Plan aprobado y publicado")
+    })
 
   const handleAddRecipe = async (receta: RecetaListItem) => {
     if (!picker) return
-    try {
-      await mealPlansService.addRecipe(idPlan, {
+    await mutate_plan(async () => {
+      const result = await mealPlansService.addRecipe(idPlan, {
         dia_semana: picker.dia,
         momento_comida: picker.momento,
         id_receta: receta.id_receta,
       })
-      await loadPlan()
-      setPicker(null)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
-    }
+      if (active_id.current === idPlan) {
+        setPlan(result)
+        setPicker(null)
+      }
+      toast.success("Receta agregada")
+    })
   }
 
   const handleRemoveRecipe = async (idPlanificacionReceta: number) => {
-    try {
+    await mutate_plan(async () => {
       await mealPlansService.removeRecipe(idPlan, idPlanificacionReceta)
+      if (active_id.current === idPlan)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                recetas: current.recetas.filter(
+                  (item) =>
+                    item.id_planificacion_receta !== idPlanificacionReceta
+                ),
+                resumen_diario: [],
+              }
+            : null
+        )
       await loadPlan()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
-    }
+      toast.success("Receta quitada")
+    })
   }
 
   const openShoppingList = async () => {
@@ -187,7 +278,8 @@ export default function PlanEditor() {
   const grid = useMemo(() => {
     const map = new Map<string, PlanificacionRecetaItem[]>()
     for (const item of plan?.recetas ?? []) {
-      const key = `${item.dia_semana}|${item.momento_comida}`
+      const key = slot_key(item)
+      if (!key) continue
       const arr = map.get(key) ?? []
       arr.push(item)
       map.set(key, arr)
@@ -202,7 +294,16 @@ export default function PlanEditor() {
   if (notFound || !plan) {
     return (
       <div className="space-y-4">
-        <p className="text-muted-foreground">Plan no encontrado.</p>
+        <p role="alert" className="text-muted-foreground">
+          {notFound
+            ? "Plan no encontrado."
+            : (load_error ?? "No pudimos cargar el plan.")}
+        </p>
+        {!notFound && (
+          <Button onClick={() => set_reload((value) => value + 1)}>
+            Reintentar
+          </Button>
+        )}
         <Button variant="outline" render={<Link to="/planificacion" />}>
           Volver a planificación
         </Button>
@@ -234,15 +335,69 @@ export default function PlanEditor() {
             {plan.descripcion ? ` · ${plan.descripcion}` : ""}
           </p>
         </div>
-        <Button variant="outline" onClick={openShoppingList} className="gap-1.5">
+        <Button
+          variant="outline"
+          onClick={openShoppingList}
+          className="gap-1.5"
+        >
           <ShoppingCart className="h-4 w-4" /> Lista de compras
         </Button>
+        {!read_only && (
+          <Button onClick={handle_publish} disabled={busy}>
+            Aprobar y publicar
+          </Button>
+        )}
       </div>
+
+      {read_only && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Este plan está en modo de sólo lectura.
+        </p>
+      )}
+      {!read_only && review_summary(plan).missing.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {plan.recetas.length
+            ? `${review_summary(plan).missing.length} momentos sin comidas. Revisalos antes de publicar.`
+            : "El borrador todavía no tiene comidas."}
+        </p>
+      )}
+      {review_summary(plan).outside.length > 0 && (
+        <Card className="space-y-2 p-4">
+          <h2>Comidas fuera de la grilla: requieren revisión</h2>
+          {review_summary(plan).outside.map((item) => (
+            <div key={item.id_planificacion_receta}>
+              {item.receta.nombre} · {item.dia_semana || "Sin día"} /{" "}
+              {item.momento_comida || "Sin momento"}
+              {!read_only && (
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    handleRemoveRecipe(item.id_planificacion_receta)
+                  }
+                >
+                  Quitar
+                </Button>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
 
       <div className="space-y-4">
         {DIAS_SEMANA.map((dia) => (
           <Card key={dia} className="p-4">
             <h2 className="mb-3 font-heading text-sm font-semibold">{dia}</h2>
+            {plan.resumen_diario
+              ?.filter((summary) => summary.dia_semana === dia)
+              .map((summary) => (
+                <p key={dia} className="mb-3 text-xs text-muted-foreground">
+                  {summary.totales
+                    ? `${Math.round(summary.totales.energia_kcal)} kcal · Proteínas ${Math.round(summary.totales.proteinas_g)} g · Carbohidratos ${Math.round(summary.totales.carbohidratos_g)} g · Grasas ${Math.round(summary.totales.grasas_totales_g)} g`
+                    : "Faltan valores nutricionales para calcular el total."}
+                  {summary.diferencia_objetivo &&
+                    ` · Diferencia con el objetivo: ${Math.round(summary.diferencia_objetivo.energia_kcal)} kcal`}
+                </p>
+              ))}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {MOMENTOS_COMIDA.map((momento) => {
                 const items = grid.get(`${dia}|${momento}`) ?? []
@@ -262,25 +417,32 @@ export default function PlanEditor() {
                           className="gap-1 pr-1"
                         >
                           {item.receta.nombre}
-                          <button
-                            onClick={() =>
-                              handleRemoveRecipe(item.id_planificacion_receta)
-                            }
-                            className="rounded-full p-0.5 hover:bg-secondary-foreground/10"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          {!read_only && (
+                            <button
+                              disabled={busy}
+                              aria-label={`Quitar ${item.receta.nombre} de ${dia} ${momento}`}
+                              onClick={() =>
+                                handleRemoveRecipe(item.id_planificacion_receta)
+                              }
+                              className="rounded-full p-0.5 hover:bg-secondary-foreground/10"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </Badge>
                       ))}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openPicker(dia, momento)}
-                      className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-                    >
-                      <Plus className="h-3 w-3" /> Agregar receta
-                    </Button>
+                    {!read_only && (
+                      <Button
+                        disabled={busy}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openPicker(dia, momento)}
+                        className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                      >
+                        <Plus className="h-3 w-3" /> Agregar receta
+                      </Button>
+                    )}
                   </div>
                 )
               })}
@@ -289,7 +451,10 @@ export default function PlanEditor() {
         ))}
       </div>
 
-      <Dialog open={!!picker} onOpenChange={(o) => !o && setPicker(null)}>
+      <Dialog
+        open={!!picker && !read_only}
+        onOpenChange={(o) => !o && !busy && setPicker(null)}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -299,6 +464,7 @@ export default function PlanEditor() {
           <div className="relative">
             <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              disabled={busy}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar por nombre…"
@@ -307,11 +473,13 @@ export default function PlanEditor() {
             />
           </div>
           <div className="max-h-72 space-y-1 overflow-y-auto">
+            {search_error && <p role="alert">{search_error}</p>}
             {searching ? (
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             ) : (
               results.map((r) => (
                 <button
+                  disabled={busy}
                   key={r.id_receta}
                   onClick={() => handleAddRecipe(r)}
                   className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
@@ -320,11 +488,14 @@ export default function PlanEditor() {
                 </button>
               ))
             )}
-            {!searching && debouncedQuery && results.length === 0 && (
-              <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                No encontramos recetas para esa búsqueda.
-              </p>
-            )}
+            {!searching &&
+              !search_error &&
+              debouncedQuery &&
+              results.length === 0 && (
+                <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                  No encontramos recetas para esa búsqueda.
+                </p>
+              )}
           </div>
         </DialogContent>
       </Dialog>
@@ -368,7 +539,13 @@ export default function PlanEditor() {
                         handleToggleItem(item.id_item, checked === true)
                       }
                     />
-                    <span className={item.comprado ? "text-muted-foreground line-through" : ""}>
+                    <span
+                      className={
+                        item.comprado
+                          ? "text-muted-foreground line-through"
+                          : ""
+                      }
+                    >
                       {item.nombre}
                     </span>
                     <span className="ml-auto text-xs text-muted-foreground">
