@@ -49,6 +49,42 @@ export interface PlanificacionDetalle {
     carbohidratos_g: number
     hidratacion_ml: number
   } | null
+  generacion_ia?: GeneracionIA | null
+}
+
+/**
+ * Metadatos de un borrador generado por el Copiloto.
+ *
+ * `sin_verificar` es lo que el backend no pudo comprobar con los datos del
+ * catálogo (una condición cargada a mano, un detalle clínico escrito libre).
+ * `advertencias` es lo que el modelo dice haber revisado sobre esos puntos, y
+ * no está verificado por el sistema. Los dos se muestran antes de aprobar.
+ */
+export type EstadoGeneracion =
+  | "pendiente"
+  | "procesando"
+  | "completada"
+  | "fallida"
+
+/** Pedido de borrador al Copiloto. Se resuelve en segundo plano. */
+export interface GeneracionPlan {
+  id_generacion: number
+  id_paciente: number
+  estado: EstadoGeneracion
+  id_planificacion: number | null
+  nombre: string | null
+  error_codigo: string | null
+  error_mensaje: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface GeneracionIA {
+  modelo: string
+  version_prompt: string
+  generado_en: string
+  sin_verificar?: string[]
+  advertencias?: string[]
 }
 
 /** Campos consumidos del PlanDetailResponse en kalorixia-server/openapi.json. */

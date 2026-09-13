@@ -240,3 +240,39 @@ describe("Revisión del plan", () => {
     expect(summary.missing).toHaveLength(28)
   })
 })
+
+describe("Puntos sin verificar del Copiloto", () => {
+  const generacion = {
+    modelo: "gemini-3.1-pro-preview",
+    version_prompt: "weekly-draft-v2",
+    generado_en: "2026-09-12T12:00:00",
+    sin_verificar: ["Detalle de «Diabetes»: «tipo 2, insulina nocturna»."],
+    advertencias: ["Descarté dos recetas con azúcar agregada."],
+  }
+
+  it("los muestra separando lo no verificado de lo que revisó el modelo", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({ ...plan, generacion_ia: generacion })
+    mount()
+    const aviso = await screen.findByRole("region", {
+      name: "Puntos sin verificar del borrador",
+    })
+    expect(within(aviso).getByText(/insulina nocturna/)).toBeTruthy()
+    expect(within(aviso).getByText(/azúcar agregada/)).toBeTruthy()
+    expect(within(aviso).getByText(/sin verificar por el sistema/)).toBeTruthy()
+  })
+
+  it("no dibuja el aviso en un plan cargado a mano", async () => {
+    mount()
+    await screen.findByRole("button", { name: "Aprobar y publicar" })
+    expect(
+      screen.queryByRole("region", { name: "Puntos sin verificar del borrador" })
+    ).toBeNull()
+  })
+
+  it("los repite en la confirmación de publicar, que es donde se decide", () => {
+    const resumen = review_summary({ ...plan, generacion_ia: generacion })
+    expect(resumen.unverified).toEqual(generacion.sin_verificar)
+    expect(resumen.description).toContain("El sistema no pudo verificar")
+    expect(resumen.description).toContain("insulina nocturna")
+  })
+})

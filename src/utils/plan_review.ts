@@ -31,9 +31,13 @@ export function review_summary(plan: PlanificacionDetalle) {
     )
   )
   const outside = plan.recetas.filter((item) => !slot_key(item))
+  // Lo que el backend no pudo comprobar viaja hasta el momento de aprobar: es
+  // ahí donde el profesional asume la responsabilidad del plan.
+  const unverified = plan.generacion_ia?.sin_verificar ?? []
   return {
     missing,
     outside,
+    unverified,
     description:
       `${plan.nombre} para ${plan.nombre_paciente}. ${plan.recetas.length} comidas, ${assigned.size} de 28 momentos cubiertos. ` +
       (missing.length
@@ -41,6 +45,9 @@ export function review_summary(plan: PlanificacionDetalle) {
         : "La grilla semanal está completa. ") +
       (outside.length
         ? `${outside.length} comidas fuera de la grilla requieren revisión. `
+        : "") +
+      (unverified.length
+        ? `El sistema no pudo verificar: ${unverified.join(" ")} `
         : "") +
       "Al aprobar y publicar, el paciente podrá ver el plan y dejará de ser editable.",
   }

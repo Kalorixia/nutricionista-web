@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/common/ConfirmDialog"
+import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -348,6 +349,8 @@ export default function PlanEditor() {
           </Button>
         )}
       </div>
+
+      <UnverifiedNotice generacion={plan.generacion_ia} />
 
       {read_only && (
         <p role="status" className="text-sm text-muted-foreground">
