@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/common/ConfirmDialog"
 import { mealPlansService } from "@/services/mealPlans.service"
+import { useGenerations } from "@/hooks/use-generations"
 import { patientsService } from "@/services/patients.service"
 import type { EstadoPlanificacion, Planificacion } from "@/types/mealPlan"
 import type { PacienteVinculado } from "@/types/patient"
@@ -51,6 +52,7 @@ export default function Planning() {
   const [descripcion, setDescripcion] = useState("")
   const [saving, setSaving] = useState(false)
   const [instructions, set_instructions] = useState("")
+  const { track } = useGenerations()
   const [load_error, set_load_error] = useState<string | null>(null)
   const [patients_error, set_patients_error] = useState<string | null>(null)
   const [busy_id, set_busy_id] = useState<number | null>(null)
@@ -122,22 +124,25 @@ export default function Planning() {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
       }
-      const plan = with_ai
-        ? await mealPlansService.generate({
-            ...input,
-            indicaciones: instructions.trim() || undefined,
-          })
-        : await mealPlansService.create(input)
-      toast.success(
-        with_ai
-          ? "Borrador generado. Revisalo antes de publicar."
-          : "Plan creado"
-      )
+      // Con IA el pedido es asíncrono: se cierra el diálogo y el profesional
+      // sigue trabajando. El aviso llega cuando el borrador está listo.
+      if (with_ai) {
+        const generacion = await mealPlansService.generate({
+          ...input,
+          indicaciones: instructions.trim() || undefined,
+        })
+        track(generacion)
+        toast.success("Lo estoy generando. Te aviso cuando esté listo.")
+      }
+      const plan = with_ai ? null : await mealPlansService.create(input)
+      if (plan) toast.success("Plan creado")
       setCreating(false)
       setIdPaciente("")
       setNombre("")
       setDescripcion("")
-      navigate(`/planificacion/${plan.id_planificacion}`)
+      set_instructions("")
+      if (plan) navigate(`/planificacion/${plan.id_planificacion}`)
+      else await load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Ocurrió un error")
     } finally {

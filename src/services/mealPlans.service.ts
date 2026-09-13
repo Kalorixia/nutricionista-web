@@ -1,5 +1,6 @@
 import { authedFetch } from "@/services/http"
 import type {
+  GeneracionPlan,
   ListaCompra,
   Planificacion,
   PlanificacionDetalle,
@@ -24,13 +25,30 @@ export interface AgregarRecetaInput {
 }
 
 export const mealPlansService = {
+  /**
+   * Pide un borrador al Copiloto. Responde apenas queda registrado el pedido,
+   * sin esperar a la IA: el borrador se genera en segundo plano y su estado se
+   * sigue con `generationStatus`.
+   */
   async generate(
     input: CrearPlanificacionInput & { indicaciones?: string }
-  ): Promise<PlanificacionDetalle> {
-    return authedFetch<PlanificacionDetalle>("/copiloto/borradores", {
+  ): Promise<GeneracionPlan> {
+    return authedFetch<GeneracionPlan>("/copiloto/borradores", {
       method: "POST",
       body: input,
     })
+  },
+
+  async generationStatus(idGeneracion: number): Promise<GeneracionPlan> {
+    return authedFetch<GeneracionPlan>(`/copiloto/generaciones/${idGeneracion}`)
+  },
+
+  /** Generaciones sin terminar del profesional; sobreviven a una recarga. */
+  async activeGenerations(): Promise<GeneracionPlan[]> {
+    const { generaciones } = await authedFetch<{
+      generaciones: GeneracionPlan[]
+    }>("/copiloto/generaciones")
+    return generaciones
   },
   async list(idPaciente?: number): Promise<Planificacion[]> {
     const qs = idPaciente ? `?id_paciente=${idPaciente}` : ""

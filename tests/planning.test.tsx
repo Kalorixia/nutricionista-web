@@ -1,9 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { UserEvent } from "@testing-library/user-event"
+import { toast } from "sonner"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import Planning from "@/pages/Planning"
 import { ConfirmProvider } from "@/components/common/ConfirmDialog"
+import { GenerationsProvider } from "@/hooks/use-generations"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { patientsService } from "@/services/patients.service"
 
@@ -14,6 +17,8 @@ vi.mock("@/services/mealPlans.service", () => ({
     generate: vi.fn(),
     remove: vi.fn(),
     archive: vi.fn(),
+    activeGenerations: vi.fn(),
+    generationStatus: vi.fn(),
   },
 }))
 vi.mock("@/services/patients.service", () => ({
@@ -24,6 +29,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(mealPlansService.list).mockResolvedValue([])
+  vi.mocked(mealPlansService.activeGenerations).mockResolvedValue([])
   vi.mocked(patientsService.listarPacientes).mockResolvedValue({
     pacientes: [{ id_paciente: 3, nombre: "Ana", apellido: "Pérez" }],
   } as Awaited<ReturnType<typeof patientsService.listarPacientes>>)
@@ -32,42 +38,68 @@ beforeEach(() => {
 function mount() {
   render(
     <MemoryRouter initialEntries={["/planificacion"]}>
-      <ConfirmProvider>
-        <Routes>
-          <Route path="/planificacion" element={<Planning />} />
-          <Route
-            path="/planificacion/:id"
-            element={<p>Editor del borrador</p>}
-          />
-        </Routes>
-      </ConfirmProvider>
+      <GenerationsProvider>
+        <ConfirmProvider>
+          <Routes>
+            <Route path="/planificacion" element={<Planning />} />
+            <Route
+              path="/planificacion/:id"
+              element={<p>Editor del borrador</p>}
+            />
+          </Routes>
+        </ConfirmProvider>
+      </GenerationsProvider>
     </MemoryRouter>
   )
 }
 
-it.each([false, true])(
-  "abre el borrador devuelto al crear (Copiloto=%s)",
-  async (with_ai) => {
-    const user = userEvent.setup()
-    const method = with_ai ? mealPlansService.generate : mealPlansService.create
-    vi.mocked(method).mockResolvedValue({ id_planificacion: 7 } as Awaited<
-      ReturnType<typeof method>
-    >)
-    mount()
-    await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
-    await user.selectOptions(screen.getByLabelText("Paciente"), "3")
-    await user.type(screen.getByLabelText("Nombre del plan"), "Semana")
-    await user.click(
-      screen.getByRole("button", {
-        name: with_ai ? "Generar con Copiloto" : "Crear manual",
-      })
+async function fillAndSubmit(user: UserEvent, label: string) {
+  await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+  await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+  await user.type(screen.getByLabelText("Nombre del plan"), "Semana")
+  await user.click(screen.getByRole("button", { name: label }))
+}
+
+it("abre el borrador al crearlo a mano", async () => {
+  const user = userEvent.setup()
+  vi.mocked(mealPlansService.create).mockResolvedValue({
+    id_planificacion: 7,
+  } as Awaited<ReturnType<typeof mealPlansService.create>>)
+  mount()
+  await fillAndSubmit(user, "Crear manual")
+  await screen.findByText("Editor del borrador")
+  expect(mealPlansService.create).toHaveBeenCalledWith(
+    expect.objectContaining({ id_paciente: 3, nombre: "Semana" })
+  )
+})
+
+it("con el Copiloto no espera: deja seguir trabajando y avisa después", async () => {
+  const user = userEvent.setup()
+  vi.mocked(mealPlansService.generate).mockResolvedValue({
+    id_generacion: 12,
+    id_paciente: 3,
+    estado: "pendiente",
+    id_planificacion: null,
+    nombre: "Semana",
+    error_codigo: null,
+    error_mensaje: null,
+    created_at: "2026-09-12T12:00:00Z",
+    updated_at: "2026-09-12T12:00:00Z",
+  })
+  mount()
+  await fillAndSubmit(user, "Generar con Copiloto")
+
+  await waitFor(() =>
+    expect(toast.success).toHaveBeenCalledWith(
+      "Lo estoy generando. Te aviso cuando esté listo."
     )
-    await screen.findByText("Editor del borrador")
-    expect(method).toHaveBeenCalledWith(
-      expect.objectContaining({ id_paciente: 3, nombre: "Semana" })
-    )
-  }
-)
+  )
+  // No navega al editor: todavía no hay borrador que abrir.
+  expect(screen.queryByText("Editor del borrador")).toBeNull()
+  expect(mealPlansService.generate).toHaveBeenCalledWith(
+    expect.objectContaining({ id_paciente: 3, nombre: "Semana" })
+  )
+})
 
 it("distingue el error de listado de una lista vacía y permite reintentar", async () => {
   vi.mocked(mealPlansService.list).mockRejectedValueOnce(
