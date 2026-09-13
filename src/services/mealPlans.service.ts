@@ -31,7 +31,7 @@ export const mealPlansService = {
    * sigue con `generationStatus`.
    */
   async generate(
-    input: CrearPlanificacionInput & { indicaciones?: string }
+    input: CrearPlanificacionInput & { indicaciones?: string; momentos?: string[] }
   ): Promise<GeneracionPlan> {
     return authedFetch<GeneracionPlan>("/copiloto/borradores", {
       method: "POST",

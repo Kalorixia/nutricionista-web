@@ -49,7 +49,7 @@ export const plan: PlanificacionDetalle = {
         dificultad: null,
         calorias_por_porcion: 500,
         estado_nutricional: "validada",
-        imagen_url: null,
+        imagen_url: "https://example.test/arroz.jpg",
         publica: true,
         created_at: "2026-09-10T12:00:00",
         updated_at: null,
@@ -274,5 +274,37 @@ describe("Puntos sin verificar del Copiloto", () => {
     expect(resumen.unverified).toEqual(generacion.sin_verificar)
     expect(resumen.description).toContain("El sistema no pudo verificar")
     expect(resumen.description).toContain("insulina nocturna")
+  })
+})
+
+describe("Fotos y resumen de receta en la grilla", () => {
+  it("muestra la foto de la comida y abre su resumen al tocarla", async () => {
+    const user = userEvent.setup()
+    mount()
+    await screen.findByText("Semana de Ana")
+
+    const foto = document.querySelector('img[src="https://example.test/arroz.jpg"]')
+    expect(foto).toBeTruthy()
+
+    await user.click(screen.getByRole("button", { name: "Ver Arroz" }))
+    const resumen = await screen.findByRole("dialog")
+    expect(within(resumen).getByText("Lunes · Desayuno")).toBeTruthy()
+    expect(within(resumen).getByText(/20 min/)).toBeTruthy()
+    expect(within(resumen).getByText(/Rinde 4/)).toBeTruthy()
+    expect(
+      within(resumen).getByRole("link", { name: "Ver la receta completa" })
+    ).toHaveProperty("href", expect.stringContaining("/recetas/2"))
+  })
+
+  it("en un plan publicado no dibuja las comidas que ese paciente no hace", async () => {
+    // El plan de prueba sólo tiene desayuno: las otras tres no deben aparecer.
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      estado: "publicada",
+    })
+    mount()
+    await screen.findByText("Este plan está en modo de sólo lectura.")
+    expect(screen.queryAllByText("Merienda")).toHaveLength(0)
+    expect(screen.queryAllByText("Desayuno").length).toBeGreaterThan(0)
   })
 })

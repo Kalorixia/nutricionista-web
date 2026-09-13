@@ -7,11 +7,13 @@ import {
   RefreshCw,
   ShoppingCart,
   Search,
+  UtensilsCrossed,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/common/ConfirmDialog"
 import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
+import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -58,6 +60,11 @@ export default function PlanEditor() {
   const busy_ref = useRef(false)
   const active_id = useRef(idPlan)
   const read_only = plan?.estado !== "borrador"
+  const [preview, set_preview] = useState<{
+    item: PlanificacionRecetaItem
+    dia: string
+    momento: string
+  } | null>(null)
 
   const [picker, setPicker] = useState<{ dia: string; momento: string } | null>(
     null
@@ -288,6 +295,19 @@ export default function PlanEditor() {
     return map
   }, [plan])
 
+  // Los planes ya no cubren siempre las cuatro comidas. En sólo lectura se
+  // muestran las que el plan usa, para no dejar casilleros vacíos de comidas
+  // que este paciente no hace; en edición se muestran todas, para poder sumarlas.
+  const momentos_usados = useMemo(
+    () =>
+      new Set(
+        (plan?.recetas ?? [])
+          .map((item) => slot_key(item)?.split("|")[1])
+          .filter(Boolean) as string[]
+      ),
+    [plan]
+  )
+
   if (loading) {
     return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
   }
@@ -352,6 +372,13 @@ export default function PlanEditor() {
 
       <UnverifiedNotice generacion={plan.generacion_ia} />
 
+      <RecipeSummaryDialog
+        receta={preview?.item.receta ?? null}
+        dia={preview?.dia}
+        momento={preview?.momento}
+        onClose={() => set_preview(null)}
+      />
+
       {read_only && (
         <p role="status" className="text-sm text-muted-foreground">
           Este plan está en modo de sólo lectura.
@@ -402,7 +429,9 @@ export default function PlanEditor() {
                 </p>
               ))}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {MOMENTOS_COMIDA.map((momento) => {
+              {MOMENTOS_COMIDA.filter(
+                (momento) => read_only ? momentos_usados.has(momento) : true
+              ).map((momento) => {
                 const items = grid.get(`${dia}|${momento}`) ?? []
                 return (
                   <div
@@ -412,14 +441,45 @@ export default function PlanEditor() {
                     <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">
                       {momento}
                     </p>
-                    <div className="mb-2 flex flex-wrap gap-1.5">
+                    <div className="mb-2 flex flex-col gap-1.5">
                       {items.map((item) => (
-                        <Badge
+                        <div
                           key={item.id_planificacion_receta}
-                          variant="secondary"
-                          className="gap-1 pr-1"
+                          className="flex items-center gap-2 rounded-lg bg-secondary/60 p-1 pr-1.5"
                         >
-                          {item.receta.nombre}
+                          <button
+                            onClick={() =>
+                              set_preview({ item, dia, momento })
+                            }
+                            aria-label={`Ver ${item.receta.nombre}`}
+                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                          >
+                            {item.receta.imagen_url ? (
+                              <img
+                                src={item.receta.imagen_url}
+                                alt=""
+                                loading="lazy"
+                                className="h-10 w-10 shrink-0 rounded-md object-cover"
+                              />
+                            ) : (
+                              <span
+                                aria-hidden="true"
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted"
+                              >
+                                <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-medium">
+                                {item.receta.nombre}
+                              </span>
+                              {item.receta.calorias_por_porcion != null && (
+                                <span className="block text-[11px] text-muted-foreground tabular-nums">
+                                  {Math.round(item.receta.calorias_por_porcion)} kcal
+                                </span>
+                              )}
+                            </span>
+                          </button>
                           {!read_only && (
                             <button
                               disabled={busy}
@@ -427,12 +487,12 @@ export default function PlanEditor() {
                               onClick={() =>
                                 handleRemoveRecipe(item.id_planificacion_receta)
                               }
-                              className="rounded-full p-0.5 hover:bg-secondary-foreground/10"
+                              className="shrink-0 rounded-full p-1 hover:bg-secondary-foreground/10"
                             >
                               <X className="h-3 w-3" />
                             </button>
                           )}
-                        </Badge>
+                        </div>
                       ))}
                     </div>
                     {!read_only && (

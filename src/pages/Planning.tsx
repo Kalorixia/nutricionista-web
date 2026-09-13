@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import { useConfirm } from "@/components/common/ConfirmDialog"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { useGenerations } from "@/hooks/use-generations"
 import { patientsService } from "@/services/patients.service"
+import { MOMENTOS_COMIDA } from "@/types/mealPlan"
 import type { EstadoPlanificacion, Planificacion } from "@/types/mealPlan"
 import type { PacienteVinculado } from "@/types/patient"
 
@@ -52,6 +54,7 @@ export default function Planning() {
   const [descripcion, setDescripcion] = useState("")
   const [saving, setSaving] = useState(false)
   const [instructions, set_instructions] = useState("")
+  const [momentos, set_momentos] = useState<string[]>([...MOMENTOS_COMIDA])
   const { track } = useGenerations()
   const [load_error, set_load_error] = useState<string | null>(null)
   const [patients_error, set_patients_error] = useState<string | null>(null)
@@ -116,6 +119,10 @@ export default function Planning() {
       toast.error("Ingresá un nombre para el plan")
       return
     }
+    if (with_ai && !momentos.length) {
+      toast.error("Elegí al menos una comida para el plan")
+      return
+    }
     setSaving(true)
     create_lock.current = true
     try {
@@ -130,6 +137,7 @@ export default function Planning() {
         const generacion = await mealPlansService.generate({
           ...input,
           indicaciones: instructions.trim() || undefined,
+          momentos,
         })
         track(generacion)
         toast.success("Lo estoy generando. Te aviso cuando esté listo.")
@@ -141,6 +149,7 @@ export default function Planning() {
       setNombre("")
       setDescripcion("")
       set_instructions("")
+      set_momentos([...MOMENTOS_COMIDA])
       if (plan) navigate(`/planificacion/${plan.id_planificacion}`)
       else await load()
     } catch (error) {
@@ -336,6 +345,40 @@ export default function Planning() {
                 placeholder="Ej: Bajar de peso, primera consulta"
                 className="min-h-[70px]"
               />
+            </div>
+            <div>
+              <Label>Comidas del plan</Label>
+              <p className="mb-2 text-xs text-muted-foreground">
+                No todos los pacientes hacen las cuatro. El Copiloto va a cubrir
+                los siete días de las que elijas.
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {MOMENTOS_COMIDA.map((momento) => (
+                  <label
+                    key={momento}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      id={`momento-${momento}`}
+                      disabled={saving}
+                      checked={momentos.includes(momento)}
+                      onCheckedChange={(marcado) =>
+                        set_momentos((actuales) =>
+                          marcado
+                            ? [...actuales, momento]
+                            : actuales.filter((valor) => valor !== momento)
+                        )
+                      }
+                    />
+                    {momento}
+                  </label>
+                ))}
+              </div>
+              {momentos.length === 0 && (
+                <p role="alert" className="mt-1 text-xs text-destructive">
+                  Elegí al menos una comida.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="copilot-instructions">

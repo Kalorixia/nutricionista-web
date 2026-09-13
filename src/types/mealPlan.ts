@@ -16,12 +16,23 @@ export interface Planificacion {
   cantidad_recetas: number
 }
 
+/**
+ * La receta tal como viene dentro del detalle de un plan. Trae los macros por
+ * porción, que el listado general de recetas no incluye: son los que el
+ * nutricionista necesita para revisar un casillero sin abrir la receta entera.
+ */
+export interface PlanRecetaResumen extends RecetaListItem {
+  proteinas_g: number | null
+  carbohidratos_g: number | null
+  grasas_totales_g: number | null
+}
+
 export interface PlanificacionRecetaItem {
   id_planificacion_receta: number
   dia_semana: string | null
   momento_comida: string | null
   orden: number | null
-  receta: RecetaListItem
+  receta: PlanRecetaResumen
 }
 
 export interface PlanificacionDetalle {
