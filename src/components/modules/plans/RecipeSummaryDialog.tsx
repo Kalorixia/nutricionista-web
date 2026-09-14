@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import type { PlanRecetaResumen } from "@/types/mealPlan"
 
@@ -105,14 +105,12 @@ export function RecipeSummaryDialog({
           </div>
         )}
 
-        <Button
-          render={<Link to={`/recetas/${receta.id_receta}`} />}
-          nativeButton={false}
-          variant="outline"
-          className="w-full"
+        <Link
+          to={`/recetas/${receta.id_receta}`}
+          className={buttonVariants({ variant: "outline", className: "w-full" })}
         >
           Ver la receta completa
-        </Button>
+        </Link>
       </DialogContent>
     </Dialog>
   )
