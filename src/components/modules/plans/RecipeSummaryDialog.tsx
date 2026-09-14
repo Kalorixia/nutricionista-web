@@ -105,10 +105,13 @@ export function RecipeSummaryDialog({
           </div>
         )}
 
-        <Button asChild variant="outline" className="w-full">
-          <Link to={`/recetas/${receta.id_receta}`}>
-            Ver la receta completa
-          </Link>
+        <Button
+          render={<Link to={`/recetas/${receta.id_receta}`} />}
+          nativeButton={false}
+          variant="outline"
+          className="w-full"
+        >
+          Ver la receta completa
         </Button>
       </DialogContent>
     </Dialog>
