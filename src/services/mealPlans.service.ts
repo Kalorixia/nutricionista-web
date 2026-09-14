@@ -1,5 +1,6 @@
 import { authedFetch } from "@/services/http"
 import type {
+  GeneracionPlan,
   ListaCompra,
   Planificacion,
   PlanificacionDetalle,
@@ -24,10 +25,36 @@ export interface AgregarRecetaInput {
 }
 
 export const mealPlansService = {
+  /**
+   * Pide un borrador al Copiloto. Responde apenas queda registrado el pedido,
+   * sin esperar a la IA: el borrador se genera en segundo plano y su estado se
+   * sigue con `generationStatus`.
+   */
+  async generate(
+    input: CrearPlanificacionInput & { indicaciones?: string; momentos?: string[] }
+  ): Promise<GeneracionPlan> {
+    return authedFetch<GeneracionPlan>("/copiloto/borradores", {
+      method: "POST",
+      body: input,
+    })
+  },
+
+  async generationStatus(idGeneracion: number): Promise<GeneracionPlan> {
+    return authedFetch<GeneracionPlan>(`/copiloto/generaciones/${idGeneracion}`)
+  },
+
+  /** Generaciones sin terminar del profesional; sobreviven a una recarga. */
+  async activeGenerations(): Promise<GeneracionPlan[]> {
+    const { generaciones } = await authedFetch<{
+      generaciones: GeneracionPlan[]
+    }>("/copiloto/generaciones")
+    return generaciones
+  },
   async list(idPaciente?: number): Promise<Planificacion[]> {
     const qs = idPaciente ? `?id_paciente=${idPaciente}` : ""
-    const { planificaciones } =
-      await authedFetch<ListaPlanificacionesResponse>(`/planificaciones${qs}`)
+    const { planificaciones } = await authedFetch<ListaPlanificacionesResponse>(
+      `/planificaciones${qs}`
+    )
     return planificaciones
   },
 
@@ -56,7 +83,10 @@ export const mealPlansService = {
     )
   },
 
-  async removeRecipe(idPlan: number, idPlanificacionReceta: number): Promise<void> {
+  async removeRecipe(
+    idPlan: number,
+    idPlanificacionReceta: number
+  ): Promise<void> {
     await authedFetch(
       `/planificaciones/${idPlan}/recetas/${idPlanificacionReceta}`,
       { method: "DELETE" }
@@ -64,15 +94,21 @@ export const mealPlansService = {
   },
 
   async publish(id: number): Promise<PlanificacionDetalle> {
-    return authedFetch<PlanificacionDetalle>(`/planificaciones/${id}/publicar`, {
-      method: "POST",
-    })
+    return authedFetch<PlanificacionDetalle>(
+      `/planificaciones/${id}/publicar`,
+      {
+        method: "POST",
+      }
+    )
   },
 
   async archive(id: number): Promise<PlanificacionDetalle> {
-    return authedFetch<PlanificacionDetalle>(`/planificaciones/${id}/archivar`, {
-      method: "POST",
-    })
+    return authedFetch<PlanificacionDetalle>(
+      `/planificaciones/${id}/archivar`,
+      {
+        method: "POST",
+      }
+    )
   },
 
   async generateShoppingList(id: number): Promise<ListaCompra> {

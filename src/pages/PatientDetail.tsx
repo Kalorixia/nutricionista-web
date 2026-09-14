@@ -17,7 +17,8 @@ import { patientsService } from "@/services/patients.service"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { formatDate } from "@/utils/format"
 import { isNotImplemented } from "@/utils/errors"
-import type { PacienteDetalle } from "@/types/patient"
+import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
+import type { PacienteDetalle, PerfilPaciente } from "@/types/patient"
 import type { Planificacion } from "@/types/mealPlan"
 
 function calcularEdad(fechaNacimiento: string): number {
@@ -38,6 +39,7 @@ export default function PatientDetail() {
   const confirm = useConfirm()
 
   const [paciente, setPaciente] = useState<PacienteDetalle | null>(null)
+  const [perfil, set_perfil] = useState<PerfilPaciente | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [notImplemented, setNotImplemented] = useState(false)
@@ -59,6 +61,23 @@ export default function PatientDetail() {
         else setNotFound(true)
       } finally {
         if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await patientsService.obtenerPerfil(Number(id))
+        if (!cancelled) set_perfil(result)
+      } catch {
+        // El perfil clínico es un agregado de esta pantalla: si falla, el resto
+        // del detalle sigue siendo util.
       }
     })()
     return () => {
@@ -197,6 +216,10 @@ export default function PatientDetail() {
           <p className="font-medium capitalize">{paciente.nivel_actividad}</p>
         </div>
       </Card>
+
+      {perfil && (
+        <ClinicalProfileCard perfil={perfil} onChange={set_perfil} />
+      )}
 
       <Card className="space-y-3 p-5">
         <div>
