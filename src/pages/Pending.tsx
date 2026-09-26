@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Clock3, LogOut, RefreshCw, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
+import { useConfirmedSignOut } from "@/hooks/use-confirmed-sign-out"
 import { nutritionistService } from "@/services/nutritionist.service"
 import KalorixiaLoader from "@/components/common/KalorixiaLoader"
 import type { EstadoMatriculaDetalle } from "@/types/auth"
@@ -10,7 +11,8 @@ import type { EstadoMatriculaDetalle } from "@/types/auth"
 const POLL_MS = 15_000
 
 export default function Pending() {
-  const { signOut, refreshMe } = useAuth()
+  const { refreshMe } = useAuth()
+  const handleSignOut = useConfirmedSignOut()
   const navigate = useNavigate()
   const [detalle, setDetalle] = useState<EstadoMatriculaDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -58,11 +60,6 @@ export default function Pending() {
     }
   }
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate("/login", { replace: true })
-  }
-
   const rechazada = detalle?.estado === "rechazada"
 
   return (
@@ -100,7 +97,8 @@ export default function Pending() {
 
             {detalle?.matricula && (
               <p className="mt-4 text-xs text-muted-foreground">
-                Matrícula: <span className="font-medium">{detalle.matricula}</span>
+                Matrícula:{" "}
+                <span className="font-medium">{detalle.matricula}</span>
               </p>
             )}
 
@@ -118,7 +116,9 @@ export default function Pending() {
                 disabled={checking}
                 className="mt-6 w-full gap-1.5"
               >
-                <RefreshCw className={`size-4 ${checking ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`size-4 ${checking ? "animate-spin" : ""}`}
+                />
                 Ya me aprobaron, verificar ahora
               </Button>
             )}

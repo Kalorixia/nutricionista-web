@@ -12,6 +12,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * El backend manda `detail` como texto en sus errores de negocio, pero en un
+ * 422 de validación de FastAPI es una lista de Pydantic con mensajes en
+ * inglés. Esos no se muestran: se reemplazan por uno en español.
+ */
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === "string") return detail
+  if (!Array.isArray(detail)) return null
+  const fields = detail.map((item) =>
+    item && typeof item === "object" && Array.isArray(item.loc)
+      ? item.loc[item.loc.length - 1]
+      : null
+  )
+  if (fields.includes("email")) return "El email ingresado no es válido"
+  return "Revisá los datos ingresados"
+}
+
 interface ApiFetchOptions extends Omit<RequestInit, "body"> {
   body?: unknown
   token?: string
@@ -45,7 +62,7 @@ export async function apiFetch<T>(
   if (!response.ok) {
     const detail =
       (data && typeof data === "object" && "detail" in data
-        ? String((data as { detail: unknown }).detail)
+        ? detailMessage((data as { detail: unknown }).detail)
         : null) ?? "Ocurrió un error inesperado"
     throw new ApiError(detail, response.status)
   }

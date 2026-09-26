@@ -1,19 +1,14 @@
-import { Outlet, useNavigate } from "react-router-dom"
+import { Outlet } from "react-router-dom"
 import { LogOut } from "lucide-react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import ProSidebar from "@/components/modules/layout/ProSidebar"
 import { GenerationsIndicator } from "@/components/modules/plans/GenerationsIndicator"
-import { useAuth } from "@/hooks/use-auth"
+import { useConfirmedSignOut } from "@/hooks/use-confirmed-sign-out"
 import { GenerationsProvider } from "@/hooks/use-generations"
 
 export default function ProLayout() {
-  const { signOut } = useAuth()
-  const navigate = useNavigate()
-  const handleSignOut = async () => {
-    await signOut()
-    navigate("/login", { replace: true })
-  }
+  const handleSignOut = useConfirmedSignOut()
 
   return (
     // El seguimiento de generaciones vive acá y no en App: consulta un endpoint

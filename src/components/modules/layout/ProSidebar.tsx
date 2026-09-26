@@ -1,4 +1,4 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom"
+import { NavLink, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
   Users,
@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/hooks/use-auth"
+import { useConfirmedSignOut } from "@/hooks/use-confirmed-sign-out"
 
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, end: true },
@@ -43,8 +44,8 @@ export default function ProSidebar() {
   const { state } = useSidebar()
   const collapsed = state === "collapsed"
   const { pathname } = useLocation()
-  const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
+  const handleSignOut = useConfirmedSignOut()
   const greetingName = user?.nombre?.trim() || "Nutricionista"
   const isActive = (url: string, end?: boolean) =>
     end ? pathname === url : pathname === url || pathname.startsWith(url + "/")
@@ -129,16 +130,11 @@ export default function ProSidebar() {
             )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" className="w-48">
-            <DropdownMenuItem
-              render={<NavLink to="/cuenta" />}
-            >
+            <DropdownMenuItem render={<NavLink to="/cuenta" />}>
               Mi cuenta
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={async () => {
-                await signOut()
-                navigate("/login", { replace: true })
-              }}
+              onClick={handleSignOut}
               className="text-destructive"
             >
               Cerrar sesión

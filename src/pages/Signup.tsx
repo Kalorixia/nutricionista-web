@@ -10,6 +10,10 @@ import { useAuth } from "@/hooks/use-auth"
 import { nutritionistService } from "@/services/nutritionist.service"
 import type { Especialidad } from "@/types/auth"
 
+// Lo mínimo que exige el backend (EmailStr): una @, algo antes y un dominio
+// con punto. El resto lo sigue validando el servidor.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export default function Signup() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
@@ -61,6 +65,24 @@ export default function Signup() {
     event.preventDefault()
     setError(null)
 
+    // El formulario va con noValidate: la validación nativa del navegador
+    // muestra sus mensajes en el idioma del navegador, no en el de la app.
+    const obligatorios = [
+      nombre,
+      apellido,
+      email,
+      password,
+      passwordConfirm,
+      matricula,
+    ]
+    if (obligatorios.some((value) => !value.trim())) {
+      setError("Completá todos los campos obligatorios")
+      return
+    }
+    if (!EMAIL_PATTERN.test(email.trim())) {
+      setError("El email ingresado no es válido")
+      return
+    }
     if (password !== passwordConfirm) {
       setError("Las contraseñas no coinciden")
       return
@@ -73,7 +95,7 @@ export default function Signup() {
     setLoading(true)
     try {
       await signUp({
-        email,
+        email: email.trim(),
         password,
         nombre,
         apellido,
@@ -81,9 +103,11 @@ export default function Signup() {
         descripcion: descripcion.trim() || undefined,
         especialidades: selectedEspecialidades,
       })
-      navigate("/verificar-email", { state: { email } })
+      navigate("/verificar-email", { state: { email: email.trim() } })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo crear la cuenta")
+      setError(
+        err instanceof Error ? err.message : "No se pudo crear la cuenta"
+      )
     } finally {
       setLoading(false)
     }
@@ -105,7 +129,7 @@ export default function Signup() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="nombre">Nombre</Label>
@@ -219,7 +243,10 @@ export default function Signup() {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           ¿Ya tenés cuenta?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Iniciar sesión
           </Link>
         </p>
