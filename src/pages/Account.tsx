@@ -11,6 +11,10 @@ import { authService } from "@/services/authService"
 import { nutritionistService } from "@/services/nutritionist.service"
 import type { EstadoMatriculaDetalle } from "@/types/auth"
 import { getSessionToken } from "@/services/session"
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH_MESSAGE,
+} from "@/utils/password"
 
 const ESTADO_LABEL: Record<EstadoMatriculaDetalle["estado"], string> = {
   pendiente: "Pendiente",
@@ -45,6 +49,10 @@ export default function Account() {
 
   const handleChangePassword = async (event: FormEvent) => {
     event.preventDefault()
+    if (newPassword.length > PASSWORD_MAX_LENGTH) {
+      toast.error(PASSWORD_MAX_LENGTH_MESSAGE)
+      return
+    }
     const token = getSessionToken()
     if (!token) return
     setSaving(true)
