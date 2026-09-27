@@ -9,6 +9,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/hooks/use-auth"
 import { nutritionistService } from "@/services/nutritionist.service"
 import type { Especialidad } from "@/types/auth"
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH_MESSAGE,
+} from "@/utils/password"
 
 // Lo mínimo que exige el backend (EmailStr): una @, algo antes y un dominio
 // con punto. El resto lo sigue validando el servidor.
@@ -89,6 +93,10 @@ export default function Signup() {
     }
     if (password.length < 8) {
       setError("La contraseña debe tener al menos 8 caracteres")
+      return
+    }
+    if (password.length > PASSWORD_MAX_LENGTH) {
+      setError(PASSWORD_MAX_LENGTH_MESSAGE)
       return
     }
 

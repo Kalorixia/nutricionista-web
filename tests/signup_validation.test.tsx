@@ -29,7 +29,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function completar(user: UserEvent, email: string) {
+async function completar(
+  user: UserEvent,
+  email: string,
+  password = "Nutri12345"
+) {
   render(
     <MemoryRouter>
       <Signup />
@@ -38,8 +42,8 @@ async function completar(user: UserEvent, email: string) {
   await user.type(screen.getByLabelText("Nombre"), "Ana")
   await user.type(screen.getByLabelText("Apellido"), "Pérez")
   if (email) await user.type(screen.getByLabelText("Email"), email)
-  await user.type(screen.getByLabelText("Contraseña"), "Nutri12345")
-  await user.type(screen.getByLabelText("Repetir contraseña"), "Nutri12345")
+  await user.type(screen.getByLabelText("Contraseña"), password)
+  await user.type(screen.getByLabelText("Repetir contraseña"), password)
   await user.type(screen.getByLabelText("Matrícula profesional"), "MN123")
   await user.click(screen.getByRole("button", { name: "Crear cuenta" }))
 }
@@ -68,6 +72,26 @@ it("un email válido llega al registro", async () => {
   expect(signUp).toHaveBeenCalledWith(
     expect.objectContaining({ email: "ana@example.com" })
   )
+})
+
+it("rechaza en español una contraseña de más de 72 caracteres", async () => {
+  const user = userEvent.setup()
+  await completar(user, "ana@example.com", "a1".repeat(36) + "a")
+
+  await screen.findByText("La contraseña debe tener como máximo 72 caracteres")
+  expect(signUp).not.toHaveBeenCalled()
+})
+
+it("una contraseña de exactamente 72 caracteres llega al registro", async () => {
+  signUp.mockResolvedValue(undefined)
+  const password = "a1".repeat(36)
+  const user = userEvent.setup()
+  await completar(user, "ana@example.com", password)
+
+  expect(signUp).toHaveBeenCalledWith(expect.objectContaining({ password }))
+  expect(
+    screen.queryByText("La contraseña debe tener como máximo 72 caracteres")
+  ).toBeNull()
 })
 
 function stubResponse(status: number, body: unknown) {
