@@ -104,7 +104,7 @@ describe("Revisión del plan", () => {
     )
     const dialog = await screen.findByRole("dialog")
     expect(dialog.textContent).toContain("Ana Pérez")
-    expect(dialog.textContent).toContain("1 de 28 momentos cubiertos")
+    expect(dialog.textContent).toContain("1 ítem en 1 comida de la semana")
     expect(mealPlansService.publish).not.toHaveBeenCalled()
     await user.click(within(dialog).getByRole("button", { name: "Cancelar" }))
     expect(mealPlansService.publish).not.toHaveBeenCalled()
@@ -222,7 +222,10 @@ describe("Revisión del plan", () => {
     await user.click(
       screen.getAllByRole("button", { name: "Agregar receta" })[1]
     )
-    await user.type(screen.getByPlaceholderText("Buscar recetas o alimentos…"), "arroz")
+    await user.type(
+      screen.getByPlaceholderText("Buscar recetas o alimentos…"),
+      "arroz"
+    )
     const option = await screen.findByRole("button", { name: "Arroz" })
     await user.dblClick(option)
     expect(mealPlansService.addRecipe).toHaveBeenCalledTimes(1)
@@ -296,6 +299,26 @@ describe("Puntos sin verificar del Copiloto", () => {
     expect(within(aviso).getByText(/insulina nocturna/)).toBeTruthy()
     expect(within(aviso).getByText(/azúcar agregada/)).toBeTruthy()
     expect(within(aviso).getByText(/sin verificar por el sistema/)).toBeTruthy()
+  })
+
+  it("muestra aparte lo que midió el sistema sobre el borrador", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      generacion_ia: {
+        ...generacion,
+        sin_verificar: [],
+        advertencias: [],
+        advertencias_sistema: [
+          "Los días quedan en promedio ~600 kcal por debajo del objetivo (2400 kcal).",
+        ],
+      },
+    })
+    mount()
+    const aviso = await screen.findByRole("region", {
+      name: "Puntos sin verificar del borrador",
+    })
+    expect(within(aviso).getByText(/~600 kcal por debajo/)).toBeTruthy()
+    expect(within(aviso).getByText(/calculado por el sistema/)).toBeTruthy()
   })
 
   it("no dibuja el aviso en un plan cargado a mano", async () => {

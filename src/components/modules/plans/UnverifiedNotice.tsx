@@ -19,7 +19,8 @@ export function UnverifiedNotice({
 }) {
   const pendientes = generacion?.sin_verificar ?? []
   const advertencias = generacion?.advertencias ?? []
-  if (!pendientes.length && !advertencias.length) return null
+  const medidas = generacion?.advertencias_sistema ?? []
+  if (!pendientes.length && !advertencias.length && !medidas.length) return null
 
   return (
     <Card
@@ -33,15 +34,33 @@ export function UnverifiedNotice({
           className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500"
         />
         <div className="space-y-1">
-          <h2 className="font-medium leading-none">
+          <h2 className="leading-none font-medium">
             Revisá esto antes de aprobar
           </h2>
           <p className="text-sm text-muted-foreground">
-            El sistema no pudo comprobar estos puntos con los datos del
-            catálogo.
+            Lo que el sistema midió sobre el borrador y lo que no pudo comprobar
+            con los datos del catálogo.
           </p>
         </div>
       </div>
+
+      {medidas.length > 0 && (
+        <div className="space-y-1.5 pl-8">
+          <p className="text-sm font-medium">
+            Ajuste del borrador{" "}
+            <span className="font-normal text-muted-foreground">
+              (calculado por el sistema)
+            </span>
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {medidas.map((item) => (
+              <li key={item} className="list-disc">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {pendientes.length > 0 && (
         <ul className="space-y-1.5 pl-8 text-sm">

@@ -135,6 +135,8 @@ export interface GeneracionIA {
   generado_en: string
   sin_verificar?: string[]
   advertencias?: string[]
+  /** Calculadas por el backend sobre lo persistido: ajuste al objetivo, comidas omitidas, variedad. */
+  advertencias_sistema?: string[]
 }
 
 /** Campos consumidos del PlanDetailResponse en kalorixia-server/openapi.json. */
