@@ -22,6 +22,24 @@ export default function Login() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
+
+    // El formulario va con noValidate: la validación nativa del navegador
+    // muestra sus mensajes en el idioma del navegador, no en el de la app.
+    const emailEmpty = !email.trim()
+    const passwordEmpty = !password.trim()
+    if (emailEmpty && passwordEmpty) {
+      setError("Completá el email y la contraseña")
+      return
+    }
+    if (emailEmpty) {
+      setError("Completá el email")
+      return
+    }
+    if (passwordEmpty) {
+      setError("Completá la contraseña")
+      return
+    }
+
     setLoading(true)
     try {
       await signIn(email, password)
@@ -48,7 +66,7 @@ export default function Login() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
