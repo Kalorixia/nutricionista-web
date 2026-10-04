@@ -20,7 +20,14 @@ export function UnverifiedNotice({
   const pendientes = generacion?.sin_verificar ?? []
   const advertencias = generacion?.advertencias ?? []
   const medidas = generacion?.advertencias_sistema ?? []
-  if (!pendientes.length && !advertencias.length && !medidas.length) return null
+  const descartes = generacion?.descartes_restricciones ?? []
+  if (
+    !pendientes.length &&
+    !advertencias.length &&
+    !medidas.length &&
+    !descartes.length
+  )
+    return null
 
   return (
     <Card
@@ -59,6 +66,41 @@ export function UnverifiedNotice({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {descartes.length > 0 && (
+        <div className="space-y-1.5 pl-8">
+          <p className="text-sm font-medium">
+            Descartado por restricciones{" "}
+            <span className="font-normal text-muted-foreground">
+              (revisión automática, sin certificar)
+            </span>
+          </p>
+          <div className="space-y-1">
+            {descartes.map((grupo) => (
+              <details key={grupo.restriccion} className="text-sm">
+                <summary className="cursor-pointer">
+                  <span className="font-medium">{grupo.restriccion}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {grupo.ingredientes.length}{" "}
+                    {grupo.ingredientes.length === 1
+                      ? "ingrediente"
+                      : "ingredientes"}{" "}
+                    · {grupo.items_descartados}{" "}
+                    {grupo.items_descartados === 1
+                      ? "ítem descartado"
+                      : "ítems descartados"}
+                  </span>
+                </summary>
+                <div className="mt-1 space-y-1 pl-4 text-muted-foreground">
+                  {grupo.motivo && <p>{grupo.motivo}</p>}
+                  <p>{grupo.ingredientes.join(", ")}</p>
+                </div>
+              </details>
+            ))}
+          </div>
         </div>
       )}
 

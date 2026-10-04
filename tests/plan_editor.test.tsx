@@ -321,6 +321,37 @@ describe("Puntos sin verificar del Copiloto", () => {
     expect(within(aviso).getByText(/calculado por el sistema/)).toBeTruthy()
   })
 
+  it("agrupa los descartes por restricción, con resumen y detalle plegable", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      generacion_ia: {
+        ...generacion,
+        sin_verificar: [],
+        advertencias: [],
+        descartes_restricciones: [
+          {
+            restriccion: "Celiaquía",
+            motivo: "Contienen trigo o gluten.",
+            ingredientes: ["Harina de trigo", "Pan francés"],
+            items_descartados: 18,
+          },
+        ],
+      },
+    })
+    mount()
+    const aviso = await screen.findByRole("region", {
+      name: "Puntos sin verificar del borrador",
+    })
+    expect(
+      within(aviso).getByText(/2 ingredientes · 18 ítems descartados/)
+    ).toBeTruthy()
+    // El motivo aparece una vez por restricción, no por ingrediente.
+    expect(
+      within(aviso).getAllByText("Contienen trigo o gluten.")
+    ).toHaveLength(1)
+    expect(within(aviso).getByText("Harina de trigo, Pan francés")).toBeTruthy()
+  })
+
   it("no dibuja el aviso en un plan cargado a mano", async () => {
     mount()
     await screen.findByRole("button", { name: "Aprobar y publicar" })

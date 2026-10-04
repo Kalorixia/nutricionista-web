@@ -139,6 +139,15 @@ export interface GeneracionIA {
   advertencias_sistema?: string[]
   desviacion?: DesviacionIA | null
   revision_profesional?: RevisionProfesional | null
+  descartes_restricciones?: DescarteRestriccion[]
+}
+
+/** Lo que descartó la revisión automática de una restricción. Juicio del modelo, no certificación. */
+export interface DescarteRestriccion {
+  restriccion: string
+  motivo: string
+  ingredientes: string[]
+  items_descartados: number
 }
 
 export interface MedidaDesviacion {
