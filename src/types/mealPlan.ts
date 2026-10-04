@@ -137,6 +137,36 @@ export interface GeneracionIA {
   advertencias?: string[]
   /** Calculadas por el backend sobre lo persistido: ajuste al objetivo, comidas omitidas, variedad. */
   advertencias_sistema?: string[]
+  desviacion?: DesviacionIA | null
+  revision_profesional?: RevisionProfesional | null
+}
+
+export interface MedidaDesviacion {
+  energia: number
+  proteinas: number | null
+  dias_fuera: number
+}
+
+/** Cuánto se aparta el borrador de los objetivos, antes y después de la corrección. */
+export interface DesviacionIA {
+  antes: MedidaDesviacion | null
+  despues: MedidaDesviacion | null
+  umbral: number
+  correccion:
+    | "aplicada"
+    | "descartada"
+    | "fallida"
+    | "no_necesaria"
+    | "deshabilitada"
+    | "sin_objetivo"
+}
+
+/** Cuánto cambió el profesional el borrador antes de publicarlo. */
+export interface RevisionProfesional {
+  agregados: number
+  quitados: number
+  cambiados: number
+  publicado_en: string
 }
 
 /** Campos consumidos del PlanDetailResponse en kalorixia-server/openapi.json. */

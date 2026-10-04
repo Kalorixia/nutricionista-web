@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner"
 import { PublishPlanDialog } from "@/components/modules/plans/PublishPlanDialog"
 import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
+import { GenerationMetrics } from "@/components/modules/plans/GenerationMetrics"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
@@ -379,6 +380,7 @@ export default function PlanEditor() {
       </div>
 
       <UnverifiedNotice generacion={plan.generacion_ia} />
+      <GenerationMetrics generacion={plan.generacion_ia} />
 
       <RecipeSummaryDialog
         receta={preview?.item.receta ?? null}
