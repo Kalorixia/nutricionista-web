@@ -8,6 +8,7 @@ import type {
   PacienteDetalle,
   PacienteVinculado,
   CatalogosRegistro,
+  PreferenciasPaciente,
 } from "@/types/patient"
 
 interface ListaCodigosResponse {
@@ -32,6 +33,17 @@ export const patientsService = {
   /** Opciones del perfil clínico: objetivos, actividad, condiciones, restricciones. */
   catalogos(): Promise<CatalogosRegistro> {
     return authedFetch<CatalogosRegistro>("/pacientes/catalogos/registro")
+  },
+
+  /** Reemplaza las preferencias del paciente; vacías, las borra (KAL-132-01). */
+  guardarPreferencias(
+    idPaciente: number,
+    preferencias: PreferenciasPaciente
+  ): Promise<PreferenciasPaciente | null> {
+    return authedFetch<PreferenciasPaciente | null>(
+      `/nutricionistas/me/pacientes/${idPaciente}/preferencias`,
+      { method: "PUT", body: preferencias }
+    )
   },
 
   /** Corrige datos del perfil. Lo que no se envía no se toca. */

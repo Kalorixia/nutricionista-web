@@ -92,6 +92,8 @@ export interface PerfilPaciente {
   objetivo: { id: number; codigo: string; nombre: string } | null
   /** Objetivo escrito por el paciente ("Otro"); excluyente con `objetivo`. */
   objetivo_personalizado?: string | null
+  /** Gustos y hábitos opcionales (KAL-132-01); null si no respondió. */
+  preferencias?: PreferenciasPaciente | null
   nivel_actividad: { id: number; nombre: string } | null
   calculo_nutricional: CalculoNutricional | null
   condiciones_medicas: CondicionPerfil[]
@@ -130,4 +132,19 @@ export interface PrescribirObjetivoInput {
   proteinas_g?: number
   grasas_g?: number
   carbohidratos_g?: number
+}
+
+export type TiempoCocina = "menos_15" | "15_30" | "30_60" | "mas_60"
+
+/** Preferencias del paciente. Orientan al Copiloto; no son restricciones. */
+export interface PreferenciasPaciente {
+  le_gustan?: string[]
+  prefiere_evitar?: string[]
+  tiempo_cocina_semana?: TiempoCocina | null
+  tiempo_cocina_fin_de_semana?: TiempoCocina | null
+  habilidad_cocina?: "basica" | "intermedia" | "avanzada" | null
+  comidas_fuera?: ("Desayuno" | "Almuerzo" | "Merienda" | "Cena")[]
+  presupuesto?: "ajustado" | "medio" | "holgado" | null
+  personas_hogar?: number | null
+  comentarios?: string | null
 }
