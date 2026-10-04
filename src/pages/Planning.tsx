@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { Archive, Loader2, Plus, Send, Sparkles } from "lucide-react"
+import { Archive, Loader2, Plus, Send, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -61,7 +61,7 @@ export default function Planning() {
   const [instructions, set_instructions] = useState("")
   const [momentos, set_momentos] = useState<string[]>([...MOMENTOS_COMIDA])
   const [targets, set_targets] = useState<ParametrosPlanInput>({})
-  const { track } = useGenerations()
+  const { active, recent, track, dismiss } = useGenerations()
   const [load_error, set_load_error] = useState<string | null>(null)
   const [patients_error, set_patients_error] = useState<string | null>(null)
   const [busy_id, set_busy_id] = useState<number | null>(null)
@@ -100,6 +100,28 @@ export default function Planning() {
       await Promise.all([load(), load_patients()])
     })()
   }, [])
+
+  const completadas = recent
+    .filter((item) => item.estado === "completada" && item.id_planificacion)
+    .map((item) => item.id_planificacion as number)
+  const nuevos = new Set(completadas)
+  const clave_completadas = completadas.join(",")
+  useEffect(() => {
+    if (!clave_completadas) return
+    void (async () => {
+      try {
+        const lista = await mealPlansService.list()
+        setPlans(lista)
+      } catch {
+        // Si falla, el borrador igual aparece en la próxima carga.
+      }
+    })()
+  }, [clave_completadas])
+  const fallidas = recent.filter((item) => item.estado === "fallida")
+  const nombre_paciente = (idPaciente: number) => {
+    const paciente = pacientes.find((item) => item.id_paciente === idPaciente)
+    return paciente ? `${paciente.nombre} ${paciente.apellido}` : "Paciente"
+  }
 
   // Entrada desde PatientDetail.tsx: "Crear plan para este paciente".
   useEffect(() => {
@@ -231,6 +253,57 @@ export default function Planning() {
         </Card>
       ) : (
         <Card className="surface-raised divide-y divide-border overflow-hidden">
+          {active.map((generacion) => (
+            <div
+              key={`g-${generacion.id_generacion}`}
+              role="status"
+              aria-label={`Generando ${generacion.nombre || "borrador"}`}
+              className="flex flex-wrap items-center gap-3 bg-primary/5 p-4"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {generacion.nombre || "Borrador del Copiloto"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {nombre_paciente(generacion.id_paciente)} ·{" "}
+                  {generacion.estado === "pendiente"
+                    ? "En cola"
+                    : "El Copiloto está armando la semana"}{" "}
+                  · <Transcurrido desde={generacion.created_at} />
+                </p>
+              </div>
+              <Badge variant="secondary" className="gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {generacion.estado === "pendiente" ? "En cola" : "Generando"}
+              </Badge>
+            </div>
+          ))}
+          {fallidas.map((generacion) => (
+            <div
+              key={`f-${generacion.id_generacion}`}
+              className="flex flex-wrap items-center gap-3 bg-destructive/5 p-4"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {generacion.nombre || "Borrador del Copiloto"}
+                </p>
+                <p className="text-xs text-destructive">
+                  {nombre_paciente(generacion.id_paciente)} ·{" "}
+                  {generacion.error_mensaje || "No se pudo generar."}
+                </p>
+              </div>
+              <Badge variant="destructive">Falló</Badge>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => dismiss(generacion.id_generacion)}
+                className="gap-1"
+                aria-label={`Descartar ${generacion.nombre || "borrador"}`}
+              >
+                <X className="h-4 w-4" /> Descartar
+              </Button>
+            </div>
+          ))}
           {plans.map((plan) => (
             <div
               key={plan.id_planificacion}
@@ -247,6 +320,14 @@ export default function Planning() {
                   {plan.nombre_paciente} · {plan.cantidad_recetas} recetas
                 </p>
               </div>
+              {nuevos.has(plan.id_planificacion) && (
+                <Badge
+                  variant="outline"
+                  className="border-primary text-primary"
+                >
+                  Nuevo
+                </Badge>
+              )}
               <Badge variant={ESTADO_VARIANT[plan.estado]}>
                 {ESTADO_LABEL[plan.estado]}
               </Badge>
@@ -284,11 +365,13 @@ export default function Planning() {
               </Button>
             </div>
           ))}
-          {plans.length === 0 && (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              Todavía no creaste ningún plan.
-            </p>
-          )}
+          {plans.length === 0 &&
+            active.length === 0 &&
+            fallidas.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                Todavía no creaste ningún plan.
+              </p>
+            )}
         </Card>
       )}
 
@@ -436,5 +519,24 @@ export default function Planning() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/** Tiempo desde que se pidió el borrador, para que se note que avanza. */
+function Transcurrido({ desde }: { desde: string }) {
+  const [ahora, set_ahora] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => set_ahora(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const segundos = Math.max(
+    0,
+    Math.floor((ahora - new Date(desde).getTime()) / 1000)
+  )
+  const minutos = Math.floor(segundos / 60)
+  return (
+    <span className="tabular-nums">
+      {minutos}:{String(segundos % 60).padStart(2, "0")}
+    </span>
   )
 }

@@ -241,3 +241,50 @@ it("completa los carbohidratos al cambiar la energía", async () => {
     (screen.getByLabelText("Carbohidratos (g)") as HTMLInputElement).value
   ).toBe("343")
 })
+
+const generacion = {
+  id_generacion: 12,
+  id_paciente: 3,
+  estado: "procesando" as const,
+  id_planificacion: null,
+  nombre: "Semana de octubre",
+  error_codigo: null,
+  error_mensaje: null,
+  created_at: new Date(Date.now() - 65000).toISOString(),
+  updated_at: new Date().toISOString(),
+}
+
+it("muestra en la lista el plan que se está generando, con paciente y tiempo", async () => {
+  vi.mocked(mealPlansService.activeGenerations).mockResolvedValue([generacion])
+  mount()
+  const fila = await screen.findByRole("status", {
+    name: "Generando Semana de octubre",
+  })
+  expect(within(fila).getByText(/Ana Pérez/)).toBeTruthy()
+  expect(
+    within(fila).getByText(/El Copiloto está armando la semana/)
+  ).toBeTruthy()
+  expect(within(fila).getByText(/1:0\d/)).toBeTruthy()
+  expect(screen.queryByText("Todavía no creaste ningún plan.")).toBeNull()
+})
+
+it("si la generación falla, queda en la lista con el motivo hasta descartarla", async () => {
+  const user = userEvent.setup()
+  vi.mocked(mealPlansService.activeGenerations)
+    .mockResolvedValueOnce([generacion])
+    .mockResolvedValue([])
+  vi.mocked(mealPlansService.generationStatus).mockResolvedValue({
+    ...generacion,
+    estado: "fallida",
+    error_mensaje: "El Copiloto alcanzó su límite de uso.",
+  })
+  mount()
+  await screen.findByRole("status", { name: "Generando Semana de octubre" })
+  expect(
+    await screen.findByText(/alcanzó su límite de uso/, {}, { timeout: 6000 })
+  ).toBeTruthy()
+  await user.click(
+    screen.getByRole("button", { name: "Descartar Semana de octubre" })
+  )
+  expect(screen.queryByText(/alcanzó su límite de uso/)).toBeNull()
+}, 10000)

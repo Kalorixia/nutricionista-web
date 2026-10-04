@@ -23,7 +23,13 @@ const POLL_MS = 4000
 
 interface GenerationsValue {
   active: GeneracionPlan[]
+  /**
+   * Las que terminaron durante esta sesión, con su resultado: la lista de
+   * planes las usa para marcar el borrador nuevo o mostrar por qué falló.
+   */
+  recent: GeneracionPlan[]
   track: (generacion: GeneracionPlan) => void
+  dismiss: (idGeneracion: number) => void
 }
 
 const GenerationsContext = createContext<GenerationsValue | null>(null)
@@ -34,6 +40,7 @@ export function GenerationsProvider({
   children: React.ReactNode
 }) {
   const [active, setActive] = useState<GeneracionPlan[]>([])
+  const [recent, setRecent] = useState<GeneracionPlan[]>([])
   const navigate = useNavigate()
   // Lo que ya estaba en curso la vuelta anterior. Sirve para avisar una sola
   // vez por generación, incluso si el componente se vuelve a montar.
@@ -80,7 +87,12 @@ export function GenerationsProvider({
 
     for (const id of finished) {
       try {
-        announce(await mealPlansService.generationStatus(id))
+        const resultado = await mealPlansService.generationStatus(id)
+        announce(resultado)
+        setRecent((previous) => [
+          ...previous.filter((item) => item.id_generacion !== id),
+          resultado,
+        ])
       } catch {
         announced.current.add(id)
       }
@@ -102,8 +114,14 @@ export function GenerationsProvider({
     )
   }, [])
 
+  const dismiss = useCallback((idGeneracion: number) => {
+    setRecent((previous) =>
+      previous.filter((item) => item.id_generacion !== idGeneracion)
+    )
+  }, [])
+
   return (
-    <GenerationsContext.Provider value={{ active, track }}>
+    <GenerationsContext.Provider value={{ active, recent, track, dismiss }}>
       {children}
     </GenerationsContext.Provider>
   )
