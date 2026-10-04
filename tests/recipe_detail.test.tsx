@@ -63,4 +63,32 @@ describe("Detalle de receta", () => {
       screen.getByRole("img", { name: `Sin imagen para ${receta.nombre}` })
     ).toBeTruthy()
   })
+
+  it("muestra un alimento sin pasos ni tiempo, con su porción", async () => {
+    vi.mocked(recipesService.get).mockResolvedValue({
+      ...receta,
+      nombre: "Banana",
+      tipo: "alimento",
+      porcion_descripcion: "1 unidad mediana (118 g)",
+      tiempo_preparacion: 0,
+      porciones: 1,
+      dificultad: null,
+      ingredientes: [
+        {
+          id_receta_ingrediente: 1,
+          nombre: "Banana",
+          cantidad: 118,
+          unidad: "g",
+          observaciones: null,
+        },
+      ],
+    })
+    mount()
+    expect(
+      await screen.findByText("Porción: 1 unidad mediana (118 g)")
+    ).toBeTruthy()
+    expect(screen.getByText("Alimento")).toBeTruthy()
+    expect(screen.queryByText("0 min")).toBeNull()
+    expect(screen.queryByText("Ingredientes")).toBeNull()
+  })
 })

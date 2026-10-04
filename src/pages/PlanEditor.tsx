@@ -547,7 +547,7 @@ export default function PlanEditor() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Agregar receta — {picker?.dia} / {picker?.momento}
+              Agregar receta o alimento — {picker?.dia} / {picker?.momento}
             </DialogTitle>
           </DialogHeader>
           <div className="relative">
@@ -556,7 +556,7 @@ export default function PlanEditor() {
               disabled={busy}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre…"
+              placeholder="Buscar recetas o alimentos…"
               className="rounded-xl pl-9"
               autoFocus
             />
@@ -571,9 +571,14 @@ export default function PlanEditor() {
                   disabled={busy}
                   key={r.id_receta}
                   onClick={() => handleAddRecipe(r)}
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
                 >
-                  {r.nombre}
+                  <span>{r.nombre}</span>
+                  {r.tipo === "alimento" && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      Alimento · {r.porcion_descripcion}
+                    </span>
+                  )}
                 </button>
               ))
             )}

@@ -222,7 +222,7 @@ describe("Revisión del plan", () => {
     await user.click(
       screen.getAllByRole("button", { name: "Agregar receta" })[1]
     )
-    await user.type(screen.getByPlaceholderText("Buscar por nombre…"), "arroz")
+    await user.type(screen.getByPlaceholderText("Buscar recetas o alimentos…"), "arroz")
     const option = await screen.findByRole("button", { name: "Arroz" })
     await user.dblClick(option)
     expect(mealPlansService.addRecipe).toHaveBeenCalledTimes(1)
