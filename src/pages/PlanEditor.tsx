@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
-import { useConfirm } from "@/components/common/ConfirmDialog"
+import { PublishPlanDialog } from "@/components/modules/plans/PublishPlanDialog"
 import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
@@ -47,7 +47,6 @@ const ESTADO_LABEL: Record<PlanificacionDetalle["estado"], string> = {
 }
 
 export default function PlanEditor() {
-  const confirm = useConfirm()
   const { id } = useParams<{ id: string }>()
   const idPlan = Number(id)
 
@@ -57,6 +56,7 @@ export default function PlanEditor() {
   const [load_error, set_load_error] = useState<string | null>(null)
   const [reload, set_reload] = useState(0)
   const [busy, set_busy] = useState(false)
+  const [publish_open, set_publish_open] = useState(false)
   const busy_ref = useRef(false)
   const active_id = useRef(idPlan)
   const read_only = plan?.estado !== "borrador"
@@ -188,24 +188,25 @@ export default function PlanEditor() {
     }
   }
 
-  const handle_publish = () =>
+  const handle_publish = () => {
+    if (!plan) return
+    if (!plan.recetas.length) {
+      toast.error(
+        "El plan no tiene comidas. Agregá al menos una antes de publicar."
+      )
+      return
+    }
+    set_publish_open(true)
+  }
+
+  const confirm_publish = () =>
     mutate_plan(async () => {
-      if (!plan) return
-      if (!plan.recetas.length) {
-        toast.error(
-          "El plan no tiene comidas. Agregá al menos una antes de publicar."
-        )
-        return
-      }
-      const approved = await confirm({
-        title: "¿Aprobar y publicar este plan?",
-        description: review_summary(plan).description,
-        confirmText: "Aprobar y publicar",
-        confirmClassName: "bg-primary text-primary-foreground",
-      })
-      if (!approved || active_id.current !== idPlan) return
+      if (active_id.current !== idPlan) return
       const result = await mealPlansService.publish(idPlan)
-      if (active_id.current === idPlan) setPlan(result)
+      if (active_id.current === idPlan) {
+        setPlan(result)
+        set_publish_open(false)
+      }
       toast.success("Plan aprobado y publicado")
     })
 
@@ -334,6 +335,13 @@ export default function PlanEditor() {
 
   return (
     <div className="space-y-6">
+      <PublishPlanDialog
+        plan={plan}
+        open={publish_open}
+        busy={busy}
+        onOpenChange={set_publish_open}
+        onConfirm={confirm_publish}
+      />
       <Button
         variant="ghost"
         size="sm"
@@ -343,7 +351,7 @@ export default function PlanEditor() {
         <ArrowLeft className="h-4 w-4" /> Planificación
       </Button>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="hero-gradient flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-primary/10 p-5 sm:p-6">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-brand-dark font-heading text-3xl font-bold">
@@ -429,8 +437,8 @@ export default function PlanEditor() {
                 </p>
               ))}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {MOMENTOS_COMIDA.filter(
-                (momento) => read_only ? momentos_usados.has(momento) : true
+              {MOMENTOS_COMIDA.filter((momento) =>
+                read_only ? momentos_usados.has(momento) : true
               ).map((momento) => {
                 const items = grid.get(`${dia}|${momento}`) ?? []
                 return (
@@ -448,9 +456,7 @@ export default function PlanEditor() {
                           className="flex items-center gap-2 rounded-lg bg-secondary/60 p-1 pr-1.5"
                         >
                           <button
-                            onClick={() =>
-                              set_preview({ item, dia, momento })
-                            }
+                            onClick={() => set_preview({ item, dia, momento })}
                             aria-label={`Ver ${item.receta.nombre}`}
                             className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                           >
@@ -475,7 +481,8 @@ export default function PlanEditor() {
                               </span>
                               {item.receta.calorias_por_porcion != null && (
                                 <span className="block text-[11px] text-muted-foreground tabular-nums">
-                                  {Math.round(item.receta.calorias_por_porcion)} kcal
+                                  {Math.round(item.receta.calorias_por_porcion)}{" "}
+                                  kcal
                                 </span>
                               )}
                             </span>

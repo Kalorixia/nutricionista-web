@@ -32,8 +32,10 @@ export default function ProLayout() {
                 <LogOut className="h-4 w-4" /> Salir
               </Button>
             </header>
-            <main className="flex-1 p-6 md:p-8">
-              <Outlet />
+            <main className="flex-1 p-4 sm:p-6 md:p-8">
+              <div className="page-shell">
+                <Outlet />
+              </div>
             </main>
           </div>
         </div>

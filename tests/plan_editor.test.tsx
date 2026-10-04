@@ -102,12 +102,41 @@ describe("Revisión del plan", () => {
     await user.click(
       await screen.findByRole("button", { name: "Aprobar y publicar" })
     )
-    const dialog = await screen.findByRole("alertdialog")
+    const dialog = await screen.findByRole("dialog")
     expect(dialog.textContent).toContain("Ana Pérez")
     expect(dialog.textContent).toContain("1 de 28 momentos cubiertos")
     expect(mealPlansService.publish).not.toHaveBeenCalled()
     await user.click(within(dialog).getByRole("button", { name: "Cancelar" }))
     expect(mealPlansService.publish).not.toHaveBeenCalled()
+  })
+
+  it("colapsa el detalle extenso y mantiene las acciones fuera del área desplazable", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      generacion_ia: {
+        modelo: "gemini-test",
+        version_prompt: "test-v1",
+        generado_en: "2026-09-12T12:00:00",
+        sin_verificar: ["texto ".repeat(500)],
+        advertencias: [],
+      },
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: "Aprobar y publicar" })
+    )
+    const dialog = await screen.findByRole("dialog")
+    const details = within(dialog)
+      .getByText("Ver detalles de la revisión")
+      .closest("details")
+    expect(details?.hasAttribute("open")).toBe(false)
+    expect(
+      within(dialog).getByRole("button", { name: "Cancelar" })
+    ).toBeTruthy()
+    expect(
+      within(dialog).getByRole("button", { name: "Aprobar y publicar" })
+    ).toBeTruthy()
   })
 
   it("publica una sola vez y pasa a sólo lectura", async () => {
@@ -122,7 +151,7 @@ describe("Revisión del plan", () => {
     await user.click(
       await screen.findByRole("button", { name: "Aprobar y publicar" })
     )
-    const dialog = await screen.findByRole("alertdialog")
+    const dialog = await screen.findByRole("dialog")
     await user.click(
       within(dialog).getByRole("button", { name: "Aprobar y publicar" })
     )
@@ -131,8 +160,8 @@ describe("Revisión del plan", () => {
     )
     expect(
       (
-        screen.getByRole("button", {
-          name: "Aprobar y publicar",
+        within(dialog).getByRole("button", {
+          name: "Publicando…",
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true)
@@ -150,7 +179,7 @@ describe("Revisión del plan", () => {
       await screen.findByRole("button", { name: "Aprobar y publicar" })
     )
     await user.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", {
+      within(await screen.findByRole("dialog")).getByRole("button", {
         name: "Aprobar y publicar",
       })
     )
@@ -158,7 +187,9 @@ describe("Revisión del plan", () => {
       expect(mealPlansService.publish).toHaveBeenCalledTimes(1)
     )
     expect(screen.getByText("Borrador")).toBeTruthy()
-    expect(screen.getByRole("button", { name: /Quitar Arroz/ })).toBeTruthy()
+    expect(
+      screen.getByRole("button", { name: /Quitar Arroz/, hidden: true })
+    ).toBeTruthy()
   })
 
   it("no publica un borrador vacío", async () => {
@@ -169,7 +200,7 @@ describe("Revisión del plan", () => {
       await screen.findByRole("button", { name: "Aprobar y publicar" })
     )
     expect(mealPlansService.publish).not.toHaveBeenCalled()
-    expect(screen.queryByRole("alertdialog")).toBeNull()
+    expect(screen.queryByRole("dialog")).toBeNull()
   })
 
   it("refleja una receta sólo después de guardarla y evita el doble envío", async () => {
@@ -254,7 +285,10 @@ describe("Puntos sin verificar del Copiloto", () => {
   }
 
   it("los muestra separando lo no verificado de lo que revisó el modelo", async () => {
-    vi.mocked(mealPlansService.get).mockResolvedValue({ ...plan, generacion_ia: generacion })
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      generacion_ia: generacion,
+    })
     mount()
     const aviso = await screen.findByRole("region", {
       name: "Puntos sin verificar del borrador",
@@ -268,15 +302,16 @@ describe("Puntos sin verificar del Copiloto", () => {
     mount()
     await screen.findByRole("button", { name: "Aprobar y publicar" })
     expect(
-      screen.queryByRole("region", { name: "Puntos sin verificar del borrador" })
+      screen.queryByRole("region", {
+        name: "Puntos sin verificar del borrador",
+      })
     ).toBeNull()
   })
 
-  it("los repite en la confirmación de publicar, que es donde se decide", () => {
+  it("los conserva estructurados para el detalle de la confirmación", () => {
     const resumen = review_summary({ ...plan, generacion_ia: generacion })
     expect(resumen.unverified).toEqual(generacion.sin_verificar)
-    expect(resumen.description).toContain("El sistema no pudo verificar")
-    expect(resumen.description).toContain("insulina nocturna")
+    expect(resumen.description).not.toContain("insulina nocturna")
   })
 })
 
@@ -286,7 +321,9 @@ describe("Fotos y resumen de receta en la grilla", () => {
     mount()
     await screen.findByText("Semana de Ana")
 
-    const foto = document.querySelector('img[src="https://example.test/arroz.jpg"]')
+    const foto = document.querySelector(
+      'img[src="https://example.test/arroz.jpg"]'
+    )
     expect(foto).toBeTruthy()
 
     await user.click(screen.getByRole("button", { name: "Ver Arroz" }))

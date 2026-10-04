@@ -52,7 +52,7 @@ export default function ProSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarContent className="bg-background">
+      <SidebarContent className="bg-sidebar">
         <div className="flex items-center gap-2.5 px-4 py-5">
           <div className="shrink-0 rounded-xl bg-primary/10 p-2 text-primary">
             <Leaf className="h-5 w-5" strokeWidth={2.2} />
@@ -103,7 +103,7 @@ export default function ProSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 border-t border-border/60 bg-background p-3">
+      <SidebarFooter className="gap-2 border-t border-border/60 bg-sidebar p-3">
         <button className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/50">
           <HelpCircle className="h-4 w-4" />
           {!collapsed && <span>Ayuda y Soporte</span>}
