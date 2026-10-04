@@ -20,6 +20,7 @@ vi.mock("@/services/mealPlans.service", () => ({
     archive: vi.fn(),
     activeGenerations: vi.fn(),
     generationStatus: vi.fn(),
+    templates: vi.fn(),
   },
 }))
 vi.mock("@/services/patients.service", () => ({
@@ -60,6 +61,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(mealPlansService.parameters).mockResolvedValue(DEL_PACIENTE)
   vi.mocked(mealPlansService.list).mockResolvedValue([])
+  vi.mocked(mealPlansService.templates).mockResolvedValue([])
   vi.mocked(mealPlansService.activeGenerations).mockResolvedValue([])
   vi.mocked(patientsService.listarPacientes).mockResolvedValue({
     pacientes: [{ id_paciente: 3, nombre: "Ana", apellido: "Pérez" }],
@@ -255,7 +257,11 @@ const generacion = {
 }
 
 it("muestra en la lista el plan que se está generando, con paciente y tiempo", async () => {
-  vi.mocked(mealPlansService.activeGenerations).mockResolvedValue([generacion])
+  // La hora se fija acá y no al cargar el módulo: con la suite cargada, los
+  // tests anteriores pueden tardar más que el margen del reloj.
+  vi.mocked(mealPlansService.activeGenerations).mockResolvedValue([
+    { ...generacion, created_at: new Date(Date.now() - 65000).toISOString() },
+  ])
   mount()
   const fila = await screen.findByRole("status", {
     name: "Generando Semana de octubre",

@@ -37,7 +37,10 @@ export interface PlanificacionRecetaItem {
 
 export interface PlanificacionDetalle {
   id_planificacion: number
-  id_paciente: number
+  /** Null en una plantilla (KAL-132-03). */
+  id_paciente: number | null
+  /** Plantilla propia: sin paciente, siempre borrador, nunca se publica. */
+  es_plantilla?: boolean
   nombre_paciente: string
   nombre: string
   descripcion: string | null
@@ -66,6 +69,29 @@ export interface PlanificacionDetalle {
   indicaciones_generales?: string | null
   /** Notas por comida, con clave "Día|Momento". */
   notas_comidas?: Record<string, string>
+}
+
+/** Una plantilla de la sección "Mis plantillas" (KAL-132-03). */
+export interface PlantillaResumen {
+  id_planificacion: number
+  nombre: string
+  descripcion: string | null
+  cantidad_recetas: number
+  created_at: string
+}
+
+/** Lo que se quitó al copiar a un paciente porque no lo puede comer. */
+export interface ItemQuitado {
+  dia_semana: string
+  momento_comida: string
+  id_receta: number
+  nombre: string | null
+  motivo: string
+}
+
+export interface CopiaPlan {
+  plan: PlanificacionDetalle
+  quitados: ItemQuitado[]
 }
 
 /** PATCH /planificaciones/{id}: lo que no se manda no se toca. */

@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { Archive, Loader2, Plus, Send, Sparkles, X } from "lucide-react"
+import {
+  Archive,
+  BookmarkPlus,
+  Copy,
+  FileText,
+  Loader2,
+  Plus,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,11 +31,16 @@ import { mealPlansService } from "@/services/mealPlans.service"
 import { useGenerations } from "@/hooks/use-generations"
 import { patientsService } from "@/services/patients.service"
 import { PlanTargetsSection } from "@/components/modules/plans/PlanTargetsSection"
+import {
+  CopyPlanDialog,
+  type ModoCopia,
+} from "@/components/modules/plans/CopyPlanDialog"
 import { MOMENTOS_COMIDA } from "@/types/mealPlan"
 import type {
   EstadoPlanificacion,
   ParametrosPlanInput,
   Planificacion,
+  PlantillaResumen,
 } from "@/types/mealPlan"
 import type { PacienteVinculado } from "@/types/patient"
 
@@ -67,12 +82,23 @@ export default function Planning() {
   const [busy_id, set_busy_id] = useState<number | null>(null)
   const action_lock = useRef(false)
   const create_lock = useRef(false)
+  const [plantillas, set_plantillas] = useState<PlantillaResumen[]>([])
+  const [copia, set_copia] = useState<{
+    modo: ModoCopia
+    origen: { id_planificacion: number; nombre: string; es_plantilla?: boolean }
+    id_paciente?: number | null
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
     set_load_error(null)
     try {
-      setPlans(await mealPlansService.list())
+      const [lista, propias] = await Promise.all([
+        mealPlansService.list(),
+        mealPlansService.templates(),
+      ])
+      setPlans(lista)
+      set_plantillas(propias)
     } catch (error) {
       set_load_error(
         error instanceof Error ? error.message : "No pudimos cargar los planes"
@@ -204,6 +230,32 @@ export default function Planning() {
         current.filter((p) => p.id_planificacion !== plan.id_planificacion)
       )
       toast.success("Plan eliminado")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    } finally {
+      action_lock.current = false
+      set_busy_id(null)
+    }
+  }
+
+  const handle_delete_template = async (plantilla: PlantillaResumen) => {
+    if (action_lock.current) return
+    action_lock.current = true
+    set_busy_id(plantilla.id_planificacion)
+    try {
+      const ok = await confirm({
+        title: "¿Eliminar esta plantilla?",
+        description: `"${plantilla.nombre}" se va a eliminar. Los planes creados desde ella no cambian.`,
+        confirmText: "Eliminar",
+      })
+      if (!ok) return
+      await mealPlansService.remove(plantilla.id_planificacion)
+      set_plantillas((actuales) =>
+        actuales.filter(
+          (item) => item.id_planificacion !== plantilla.id_planificacion
+        )
+      )
+      toast.success("Plantilla eliminada")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Ocurrió un error")
     } finally {
@@ -357,6 +409,32 @@ export default function Planning() {
               <Button
                 size="sm"
                 variant="ghost"
+                onClick={() =>
+                  set_copia({
+                    modo: "duplicar",
+                    origen: plan,
+                    id_paciente: plan.id_paciente,
+                  })
+                }
+                disabled={busy_id !== null}
+                className="gap-1"
+                aria-label={`Duplicar ${plan.nombre}`}
+              >
+                <Copy className="h-4 w-4" /> Duplicar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => set_copia({ modo: "plantilla", origen: plan })}
+                disabled={busy_id !== null}
+                className="gap-1"
+                aria-label={`Guardar ${plan.nombre} como plantilla`}
+              >
+                <BookmarkPlus className="h-4 w-4" /> Plantilla
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => handleDelete(plan)}
                 disabled={busy_id !== null}
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -373,6 +451,90 @@ export default function Planning() {
               </p>
             )}
         </Card>
+      )}
+
+      {!loading && !load_error && (
+        <section className="space-y-3" aria-label="Mis plantillas">
+          <div>
+            <h2 className="text-brand-dark font-heading text-xl font-semibold">
+              Mis plantillas
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Planes base privados para reusar. Guardá cualquier plan como
+              plantilla y creá desde ella un borrador para un paciente.
+            </p>
+          </div>
+          <Card className="divide-y divide-border overflow-hidden">
+            {plantillas.map((plantilla) => (
+              <div
+                key={plantilla.id_planificacion}
+                className="flex flex-wrap items-center gap-3 p-4"
+              >
+                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to={`/planificacion/${plantilla.id_planificacion}`}
+                    className="truncate font-medium hover:underline"
+                  >
+                    {plantilla.nombre}
+                  </Link>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {plantilla.cantidad_recetas} ítems
+                    {plantilla.descripcion ? ` · ${plantilla.descripcion}` : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    set_copia({
+                      modo: "duplicar",
+                      origen: { ...plantilla, es_plantilla: true },
+                    })
+                  }
+                  disabled={busy_id !== null}
+                  className="gap-1 rounded-xl"
+                >
+                  <Plus className="h-4 w-4" /> Crear plan
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handle_delete_template(plantilla)}
+                  disabled={busy_id !== null}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Eliminar plantilla ${plantilla.nombre}`}
+                >
+                  Eliminar
+                </Button>
+              </div>
+            ))}
+            {plantillas.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                Todavía no guardaste plantillas.
+              </p>
+            )}
+          </Card>
+        </section>
+      )}
+
+      {copia && (
+        <CopyPlanDialog
+          modo={copia.modo}
+          origen={copia.origen}
+          pacientes={pacientes}
+          idPacienteInicial={copia.id_paciente}
+          onClose={() => set_copia(null)}
+          onDone={(resultado) => {
+            set_copia(null)
+            toast.success(
+              resultado.plan.es_plantilla
+                ? "Plantilla guardada"
+                : "Borrador creado"
+            )
+            navigate(`/planificacion/${resultado.plan.id_planificacion}`)
+          }}
+        />
       )}
 
       <Dialog

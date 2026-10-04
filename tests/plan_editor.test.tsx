@@ -17,6 +17,15 @@ vi.mock("@/services/mealPlans.service", () => ({
     addRecipe: vi.fn(),
     removeRecipe: vi.fn(),
     update: vi.fn(),
+    duplicate: vi.fn(),
+    saveAsTemplate: vi.fn(),
+  },
+}))
+vi.mock("@/services/patients.service", () => ({
+  patientsService: {
+    listarPacientes: vi.fn().mockResolvedValue({
+      pacientes: [{ id_paciente: 3, nombre: "Ana", apellido: "Pérez" }],
+    }),
   },
 }))
 vi.mock("@/services/recipes.service", () => ({
@@ -527,5 +536,63 @@ describe("Indicaciones y notas para el paciente (KAL-132-02)", () => {
       })
     )
     expect(await screen.findByText("Tomá 2 litros de agua.")).toBeTruthy()
+  })
+})
+
+describe("Plantillas (KAL-132-03)", () => {
+  it("una plantilla se edita pero no se publica ni tiene paciente", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...structuredClone(plan),
+      id_paciente: null,
+      nombre_paciente: "Plantilla",
+      es_plantilla: true,
+    })
+    mount()
+    await screen.findByText(/Plantilla privada/)
+    expect(
+      screen.queryByRole("button", { name: "Aprobar y publicar" })
+    ).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: /Lista de compras/ })
+    ).toBeNull()
+    expect(
+      screen.getByRole("button", { name: /Editar datos del plan/ })
+    ).toBeTruthy()
+    const user = userEvent.setup()
+    await user.click(
+      screen.getByRole("button", { name: /Crear plan para un paciente/ })
+    )
+    const dialogo = await screen.findByRole("dialog")
+    await within(dialogo).findByRole("option", { name: "Ana Pérez" })
+    expect(
+      (within(dialogo).getByLabelText("Nombre") as HTMLInputElement).value
+    ).toBe("Semana de Ana")
+  })
+
+  it("un plan se puede guardar como plantilla desde el editor", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.saveAsTemplate).mockResolvedValue({
+      plan: {
+        ...plan,
+        id_planificacion: 31,
+        id_paciente: null,
+        es_plantilla: true,
+      },
+      quitados: [],
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: /Guardar como plantilla/ })
+    )
+    const dialogo = await screen.findByRole("dialog")
+    await user.click(
+      within(dialogo).getByRole("button", { name: "Guardar plantilla" })
+    )
+    await waitFor(() =>
+      expect(mealPlansService.saveAsTemplate).toHaveBeenCalledWith(
+        7,
+        "Semana de Ana"
+      )
+    )
   })
 })

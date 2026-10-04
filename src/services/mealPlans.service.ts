@@ -1,12 +1,14 @@
 import { authedFetch } from "@/services/http"
 import type {
   ActualizarPlanificacionInput,
+  CopiaPlan,
   GeneracionPlan,
   ListaCompra,
   ParametrosPlan,
   ParametrosPlanInput,
   Planificacion,
   PlanificacionDetalle,
+  PlantillaResumen,
 } from "@/types/mealPlan"
 
 interface ListaPlanificacionesResponse {
@@ -100,6 +102,34 @@ export const mealPlansService = {
       method: "PATCH",
       body: input,
     })
+  },
+
+  /**
+   * Copia un plan (o una plantilla) como borrador para un paciente. Lo que el
+   * paciente no puede comer se quita y vuelve en `quitados` (KAL-132-03).
+   */
+  async duplicate(
+    id: number,
+    input: { id_paciente: number; nombre?: string }
+  ): Promise<CopiaPlan> {
+    return authedFetch<CopiaPlan>(`/planificaciones/${id}/duplicar`, {
+      method: "POST",
+      body: input,
+    })
+  },
+
+  async saveAsTemplate(id: number, nombre?: string): Promise<CopiaPlan> {
+    return authedFetch<CopiaPlan>(`/planificaciones/${id}/plantilla`, {
+      method: "POST",
+      body: nombre ? { nombre } : {},
+    })
+  },
+
+  async templates(): Promise<PlantillaResumen[]> {
+    const { plantillas } = await authedFetch<{
+      plantillas: PlantillaResumen[]
+    }>("/planificaciones/plantillas")
+    return plantillas
   },
 
   async remove(id: number): Promise<void> {

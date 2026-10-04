@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
+  BookmarkPlus,
+  Copy,
   Loader2,
   NotebookPen,
   Pencil,
@@ -19,6 +21,10 @@ import { GenerationMetrics } from "@/components/modules/plans/GenerationMetrics"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
 import { PlanHeaderDialog } from "@/components/modules/plans/PlanHeaderDialog"
 import { TextEditDialog } from "@/components/modules/plans/TextEditDialog"
+import {
+  CopyPlanDialog,
+  type ModoCopia,
+} from "@/components/modules/plans/CopyPlanDialog"
 import { useConfirm } from "@/components/common/ConfirmDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
@@ -55,6 +61,8 @@ const ESTADO_LABEL: Record<PlanificacionDetalle["estado"], string> = {
 export default function PlanEditor() {
   const { id } = useParams<{ id: string }>()
   const idPlan = Number(id)
+  const navigate = useNavigate()
+  const [copia, set_copia] = useState<ModoCopia | null>(null)
 
   const [plan, setPlan] = useState<PlanificacionDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -386,20 +394,52 @@ export default function PlanEditor() {
             <h1 className="text-brand-dark font-heading text-3xl font-bold">
               {plan.nombre}
             </h1>
-            <Badge variant="secondary">{ESTADO_LABEL[plan.estado]}</Badge>
+            <Badge variant="secondary">
+              {plan.es_plantilla ? "Plantilla" : ESTADO_LABEL[plan.estado]}
+            </Badge>
           </div>
           <p className="text-muted-foreground">
-            {plan.nombre_paciente}
+            {plan.es_plantilla
+              ? "Plantilla privada: no tiene paciente ni se publica"
+              : plan.nombre_paciente}
             {plan.descripcion ? ` · ${plan.descripcion}` : ""}
           </p>
         </div>
+        {!plan.es_plantilla && (
+          <Button
+            variant="outline"
+            onClick={openShoppingList}
+            className="gap-1.5"
+          >
+            <ShoppingCart className="h-4 w-4" /> Lista de compras
+          </Button>
+        )}
         <Button
           variant="outline"
-          onClick={openShoppingList}
+          onClick={() => set_copia("duplicar")}
+          disabled={busy}
           className="gap-1.5"
         >
-          <ShoppingCart className="h-4 w-4" /> Lista de compras
+          {plan.es_plantilla ? (
+            <>
+              <Plus className="h-4 w-4" /> Crear plan para un paciente
+            </>
+          ) : (
+            <>
+              <Copy className="h-4 w-4" /> Duplicar
+            </>
+          )}
         </Button>
+        {!plan.es_plantilla && (
+          <Button
+            variant="outline"
+            onClick={() => set_copia("plantilla")}
+            disabled={busy}
+            className="gap-1.5"
+          >
+            <BookmarkPlus className="h-4 w-4" /> Guardar como plantilla
+          </Button>
+        )}
         {!read_only && (
           <Button
             variant="outline"
@@ -410,12 +450,30 @@ export default function PlanEditor() {
             <Pencil className="h-4 w-4" /> Editar datos del plan
           </Button>
         )}
-        {plan.estado === "borrador" && (
+        {plan.estado === "borrador" && !plan.es_plantilla && (
           <Button onClick={handle_publish} disabled={busy}>
             Aprobar y publicar
           </Button>
         )}
       </div>
+
+      {copia && (
+        <CopyPlanDialog
+          modo={copia}
+          origen={plan}
+          idPacienteInicial={plan.id_paciente}
+          onClose={() => set_copia(null)}
+          onDone={(resultado) => {
+            set_copia(null)
+            toast.success(
+              resultado.plan.es_plantilla
+                ? "Plantilla guardada"
+                : "Borrador creado"
+            )
+            navigate(`/planificacion/${resultado.plan.id_planificacion}`)
+          }}
+        />
+      )}
 
       <UnverifiedNotice generacion={plan.generacion_ia} />
       <GenerationMetrics generacion={plan.generacion_ia} />
@@ -538,6 +596,7 @@ export default function PlanEditor() {
         </p>
       )}
       {plan.estado === "borrador" &&
+        !plan.es_plantilla &&
         review_summary(plan).missing.length > 0 && (
           <p className="text-sm text-muted-foreground">
             {plan.recetas.length
