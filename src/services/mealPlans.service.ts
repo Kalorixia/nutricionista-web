@@ -1,5 +1,6 @@
 import { authedFetch } from "@/services/http"
 import type {
+  ActualizarPlanificacionInput,
   GeneracionPlan,
   ListaCompra,
   ParametrosPlan,
@@ -86,6 +87,17 @@ export const mealPlansService = {
   async create(input: CrearPlanificacionInput): Promise<PlanificacionDetalle> {
     return authedFetch<PlanificacionDetalle>("/planificaciones", {
       method: "POST",
+      body: input,
+    })
+  },
+
+  /** Datos del plan. Vale para borradores y publicados (KAL-131-08). */
+  async update(
+    id: number,
+    input: ActualizarPlanificacionInput
+  ): Promise<PlanificacionDetalle> {
+    return authedFetch<PlanificacionDetalle>(`/planificaciones/${id}`, {
+      method: "PATCH",
       body: input,
     })
   },

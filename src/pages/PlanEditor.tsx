@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import {
   ArrowLeft,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   ShoppingCart,
@@ -15,6 +16,8 @@ import { PublishPlanDialog } from "@/components/modules/plans/PublishPlanDialog"
 import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
 import { GenerationMetrics } from "@/components/modules/plans/GenerationMetrics"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
+import { PlanHeaderDialog } from "@/components/modules/plans/PlanHeaderDialog"
+import { useConfirm } from "@/components/common/ConfirmDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -60,7 +63,13 @@ export default function PlanEditor() {
   const [publish_open, set_publish_open] = useState(false)
   const busy_ref = useRef(false)
   const active_id = useRef(idPlan)
-  const read_only = plan?.estado !== "borrador"
+  // Un plan publicado se corrige sin republicarlo (KAL-131-08); sólo el
+  // archivado es de sólo lectura.
+  const read_only = !plan || plan.estado === "archivada"
+  const publicado = plan?.estado === "publicada"
+  const confirm = useConfirm()
+  const edicion_confirmada = useRef(false)
+  const [header_open, set_header_open] = useState(false)
   const [preview, set_preview] = useState<{
     item: PlanificacionRecetaItem
     dia: string
@@ -88,6 +97,7 @@ export default function PlanEditor() {
 
   useEffect(() => {
     active_id.current = idPlan
+    edicion_confirmada.current = false
     let cancelled = false
     void (async () => {
       setLoading(true)
@@ -171,6 +181,17 @@ export default function PlanEditor() {
 
   const mutate_plan = async (operation: () => Promise<void>) => {
     if (busy_ref.current || read_only) return
+    // El paciente ya tiene este plan: el primer cambio se confirma.
+    if (publicado && !edicion_confirmada.current) {
+      const ok = await confirm({
+        title: "¿Modificar un plan publicado?",
+        description:
+          "El paciente va a ver este cambio de inmediato, sin que vuelvas a publicar. Queda registrado quién y cuándo lo modificó.",
+        confirmText: "Modificar",
+      })
+      if (!ok) return
+      edicion_confirmada.current = true
+    }
     busy_ref.current = true
     set_busy(true)
     try {
@@ -373,6 +394,16 @@ export default function PlanEditor() {
           <ShoppingCart className="h-4 w-4" /> Lista de compras
         </Button>
         {!read_only && (
+          <Button
+            variant="outline"
+            onClick={() => set_header_open(true)}
+            disabled={busy}
+            className="gap-1.5"
+          >
+            <Pencil className="h-4 w-4" /> Editar datos del plan
+          </Button>
+        )}
+        {plan.estado === "borrador" && (
           <Button onClick={handle_publish} disabled={busy}>
             Aprobar y publicar
           </Button>
@@ -389,18 +420,44 @@ export default function PlanEditor() {
         onClose={() => set_preview(null)}
       />
 
+      {header_open && (
+        <PlanHeaderDialog
+          plan={plan}
+          busy={busy}
+          onClose={() => set_header_open(false)}
+          onSave={(cambios) =>
+            void mutate_plan(async () => {
+              const result = await mealPlansService.update(idPlan, cambios)
+              if (active_id.current === idPlan) {
+                setPlan(result)
+                set_header_open(false)
+              }
+              toast.success("Datos del plan actualizados")
+            })
+          }
+        />
+      )}
+
       {read_only && (
         <p role="status" className="text-sm text-muted-foreground">
           Este plan está en modo de sólo lectura.
         </p>
       )}
-      {!read_only && review_summary(plan).missing.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {plan.recetas.length
-            ? `${review_summary(plan).missing.length} momentos sin comidas. Revisalos antes de publicar.`
-            : "El borrador todavía no tiene comidas."}
+      {publicado && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Plan publicado: lo que cambies lo ve el paciente de inmediato.
+          {plan.ultima_edicion &&
+            ` Última modificación: ${new Date(plan.ultima_edicion.fecha).toLocaleString("es-AR")} por ${plan.ultima_edicion.usuario} (${plan.ediciones ?? 1} ${(plan.ediciones ?? 1) === 1 ? "cambio" : "cambios"} desde que se publicó).`}
         </p>
       )}
+      {plan.estado === "borrador" &&
+        review_summary(plan).missing.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {plan.recetas.length
+              ? `${review_summary(plan).missing.length} momentos sin comidas. Revisalos antes de publicar.`
+              : "El borrador todavía no tiene comidas."}
+          </p>
+        )}
       {review_summary(plan).outside.length > 0 && (
         <Card className="space-y-2 p-4">
           <h2>Comidas fuera de la grilla: requieren revisión</h2>

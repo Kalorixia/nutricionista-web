@@ -55,6 +55,22 @@ export interface PlanificacionDetalle {
   }[]
   objetivos_nutricionales?: ObjetivosPlan | null
   generacion_ia?: GeneracionIA | null
+  /** Última modificación después de publicar (KAL-131-08). Sólo para el profesional. */
+  ultima_edicion?: {
+    fecha: string
+    usuario: string
+    accion: "agregar_item" | "quitar_item" | "editar_cabecera"
+  } | null
+  ediciones?: number
+}
+
+/** PATCH /planificaciones/{id}: lo que no se manda no se toca. */
+export interface ActualizarPlanificacionInput {
+  nombre?: string
+  descripcion?: string | null
+  fecha_inicio?: string | null
+  fecha_fin?: string | null
+  objetivos?: ObjetivosPlanInput
 }
 
 /**

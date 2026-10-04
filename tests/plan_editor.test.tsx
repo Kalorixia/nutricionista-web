@@ -16,6 +16,7 @@ vi.mock("@/services/mealPlans.service", () => ({
     publish: vi.fn(),
     addRecipe: vi.fn(),
     removeRecipe: vi.fn(),
+    update: vi.fn(),
   },
 }))
 vi.mock("@/services/recipes.service", () => ({
@@ -80,7 +81,7 @@ beforeEach(() => {
 })
 
 describe("Revisión del plan", () => {
-  it.each(["publicada", "archivada"] as const)(
+  it.each(["archivada"] as const)(
     "muestra %s sin controles de edición",
     async (estado) => {
       vi.mocked(mealPlansService.get).mockResolvedValue({ ...plan, estado })
@@ -166,7 +167,11 @@ describe("Revisión del plan", () => {
       ).disabled
     ).toBe(true)
     finish({ ...plan, estado: "publicada" })
-    await screen.findByText("Este plan está en modo de sólo lectura.")
+    // Publicado sigue siendo editable, pero avisa que el paciente lo ve.
+    await screen.findByText(/Plan publicado: lo que cambies lo ve el paciente/)
+    expect(
+      screen.queryByRole("button", { name: "Aprobar y publicar" })
+    ).toBeNull()
   })
 
   it("conserva borrador y comidas cuando falla la publicación", async () => {
@@ -390,15 +395,88 @@ describe("Fotos y resumen de receta en la grilla", () => {
     ).toHaveProperty("href", expect.stringContaining("/recetas/2"))
   })
 
-  it("en un plan publicado no dibuja las comidas que ese paciente no hace", async () => {
+  it("en un plan archivado no dibuja las comidas que ese paciente no hace", async () => {
     // El plan de prueba sólo tiene desayuno: las otras tres no deben aparecer.
     vi.mocked(mealPlansService.get).mockResolvedValue({
       ...plan,
-      estado: "publicada",
+      estado: "archivada",
     })
     mount()
     await screen.findByText("Este plan está en modo de sólo lectura.")
     expect(screen.queryAllByText("Merienda")).toHaveLength(0)
     expect(screen.queryAllByText("Desayuno").length).toBeGreaterThan(0)
+  })
+})
+
+describe("Edición de un plan publicado (KAL-131-08)", () => {
+  const publicado: PlanificacionDetalle = {
+    ...plan,
+    estado: "publicada",
+    ediciones: 2,
+    ultima_edicion: {
+      fecha: "2026-10-04T15:00:00Z",
+      usuario: "Laura Gómez",
+      accion: "quitar_item",
+    },
+  }
+
+  it("deja editar, pide confirmación una sola vez y muestra la última modificación", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(
+      structuredClone(publicado)
+    )
+    vi.mocked(mealPlansService.removeRecipe).mockResolvedValue()
+    mount()
+    expect(await screen.findByText(/por Laura Gómez \(2 cambios/)).toBeTruthy()
+    const quitar = await screen.findByRole("button", {
+      name: /Quitar Arroz/,
+      hidden: true,
+    })
+    await user.click(quitar)
+    const aviso = await screen.findByRole("alertdialog")
+    expect(
+      within(aviso).getByText(/El paciente va a ver este cambio/)
+    ).toBeTruthy()
+    await user.click(within(aviso).getByRole("button", { name: "Modificar" }))
+    await waitFor(() =>
+      expect(mealPlansService.removeRecipe).toHaveBeenCalledWith(7, 1)
+    )
+  })
+
+  it("si no se confirma, no toca el plan", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(
+      structuredClone(publicado)
+    )
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: /Quitar Arroz/, hidden: true })
+    )
+    const aviso = await screen.findByRole("alertdialog")
+    await user.click(within(aviso).getByRole("button", { name: /Cancelar/ }))
+    expect(mealPlansService.removeRecipe).not.toHaveBeenCalled()
+  })
+
+  it("edita los datos del plan", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(structuredClone(plan))
+    vi.mocked(mealPlansService.update).mockResolvedValue({
+      ...plan,
+      nombre: "Semana corregida",
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: /Editar datos del plan/ })
+    )
+    const nombre = await screen.findByLabelText("Nombre del plan")
+    await user.clear(nombre)
+    await user.type(nombre, "Semana corregida")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(mealPlansService.update).toHaveBeenCalledWith(7, {
+        nombre: "Semana corregida",
+      })
+    )
+    expect(await screen.findByText("Semana corregida")).toBeTruthy()
   })
 })
