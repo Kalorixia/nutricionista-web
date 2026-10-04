@@ -7,6 +7,7 @@ import type {
   EstadoCodigo,
   PacienteDetalle,
   PacienteVinculado,
+  CatalogosRegistro,
 } from "@/types/patient"
 
 interface ListaCodigosResponse {
@@ -26,6 +27,11 @@ export const patientsService = {
     return authedFetch<PerfilPaciente>(
       `/nutricionistas/me/pacientes/${idPaciente}/perfil`
     )
+  },
+
+  /** Opciones del perfil clínico: objetivos, actividad, condiciones, restricciones. */
+  catalogos(): Promise<CatalogosRegistro> {
+    return authedFetch<CatalogosRegistro>("/pacientes/catalogos/registro")
   },
 
   /** Corrige datos del perfil. Lo que no se envía no se toca. */

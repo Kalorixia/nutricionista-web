@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ClinicalProfileForm } from "@/components/modules/patients/ClinicalProfileForm"
 import { patientsService } from "@/services/patients.service"
 import type { PerfilPaciente } from "@/types/patient"
 
 /**
  * Perfil clínico del paciente, editable por el profesional.
  *
- * Hasta ahora estos datos sólo los podía tocar el paciente desde su app, así
- * que un peso mal cargado en el onboarding quedaba mal para siempre y el
- * nutricionista no tenía forma de corregirlo.
+ * El profesional corrige todo lo físico y clínico (sexo, peso, altura,
+ * actividad, objetivo, condiciones y restricciones) sin depender de que el
+ * paciente lo haga desde la app. Nombre y fecha de nacimiento no (KAL-131-07).
  *
  * Los objetivos se prescriben aparte: son una decisión clínica, no un dato
  * físico. Lo prescrito gana sobre el cálculo y sobrevive a que el paciente
@@ -30,8 +31,6 @@ export function ClinicalProfileCard({
 }) {
   const [editando, set_editando] = useState<"datos" | "objetivo" | null>(null)
   const [guardando, set_guardando] = useState(false)
-  const [peso, set_peso] = useState("")
-  const [altura, set_altura] = useState("")
   const [kcal, set_kcal] = useState("")
 
   const calculo = perfil.calculo_nutricional
@@ -66,11 +65,7 @@ export function ClinicalProfileCard({
     }
   }
 
-  const abrir_datos = () => {
-    set_peso(perfil.peso_kg != null ? String(perfil.peso_kg) : "")
-    set_altura(perfil.altura_cm != null ? String(perfil.altura_cm) : "")
-    set_editando("datos")
-  }
+  const abrir_datos = () => set_editando("datos")
 
   const abrir_objetivo = () => {
     set_kcal(
@@ -98,65 +93,16 @@ export function ClinicalProfileCard({
       </div>
 
       {editando === "datos" ? (
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const cambios: Record<string, number> = {}
-            if (peso.trim()) cambios.peso_kg = Number(peso)
-            if (altura.trim()) cambios.altura_cm = Number(altura)
+        <ClinicalProfileForm
+          perfil={perfil}
+          guardando={guardando}
+          onGuardar={(cambios) =>
             void guardar(() =>
               patientsService.actualizarPerfil(perfil.id_paciente, cambios)
             )
-          }}
-        >
-          <div>
-            <Label htmlFor="perfil-peso">Peso (kg)</Label>
-            <Input
-              id="perfil-peso"
-              type="number"
-              step="0.1"
-              min="1"
-              max="500"
-              value={peso}
-              disabled={guardando}
-              onChange={(event) => set_peso(event.target.value)}
-              className="w-28"
-            />
-          </div>
-          <div>
-            <Label htmlFor="perfil-altura">Altura (cm)</Label>
-            <Input
-              id="perfil-altura"
-              type="number"
-              step="0.1"
-              min="30"
-              max="300"
-              value={altura}
-              disabled={guardando}
-              onChange={(event) => set_altura(event.target.value)}
-              className="w-28"
-            />
-          </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={guardando}
-            className="gap-1.5"
-          >
-            {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{" "}
-            Guardar
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={guardando}
-            onClick={() => set_editando(null)}
-          >
-            Cancelar
-          </Button>
-        </form>
+          }
+          onCancelar={() => set_editando(null)}
+        />
       ) : (
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
           <Dato

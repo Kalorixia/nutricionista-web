@@ -6,7 +6,11 @@ import { patientsService } from "@/services/patients.service"
 import type { PerfilPaciente } from "@/types/patient"
 
 vi.mock("@/services/patients.service", () => ({
-  patientsService: { actualizarPerfil: vi.fn(), prescribirObjetivo: vi.fn() },
+  patientsService: {
+    actualizarPerfil: vi.fn(),
+    prescribirObjetivo: vi.fn(),
+    catalogos: vi.fn(),
+  },
 }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -45,7 +49,33 @@ function perfil(overrides: Partial<PerfilPaciente> = {}): PerfilPaciente {
   }
 }
 
-beforeEach(() => vi.clearAllMocks())
+const CATALOGOS = {
+  objetivos: [
+    {
+      id: 1,
+      codigo: "aumentar_masa_muscular",
+      nombre: "Aumentar masa muscular",
+    },
+    { id: 3, codigo: "mantener_peso", nombre: "Mantener el peso" },
+  ],
+  niveles_actividad: [
+    { id: 2, nombre: "moderado" },
+    { id: 3, nombre: "intenso" },
+  ],
+  condiciones_medicas: [
+    { id: 1, nombre: "Celiaquía" },
+    { id: 2, nombre: "Diabetes" },
+  ],
+  restricciones_alimentarias: [
+    { id: 4, tipo: "intolerancia", nombre: "Lactosa" },
+    { id: 6, tipo: "aversion", nombre: "Pescado" },
+  ],
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(patientsService.catalogos).mockResolvedValue(CATALOGOS)
+})
 
 describe("Perfil clínico editable por el profesional", () => {
   it("deja corregir un peso mal cargado en el onboarding", async () => {
@@ -56,7 +86,7 @@ describe("Perfil clínico editable por el profesional", () => {
     render(<ClinicalProfileCard perfil={perfil()} onChange={onChange} />)
 
     await user.click(screen.getByRole("button", { name: /Editar datos/ }))
-    const peso = screen.getByLabelText("Peso (kg)")
+    const peso = await screen.findByLabelText("Peso (kg)")
     await user.clear(peso)
     await user.type(peso, "58")
     await user.click(screen.getByRole("button", { name: "Guardar" }))
@@ -159,5 +189,68 @@ describe("Perfil clínico editable por el profesional", () => {
         get_objetivo_kcal: 2600,
       })
     )
+  })
+
+  it("edita lo clínico completo sin tocar nombre ni fecha de nacimiento", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(
+      <ClinicalProfileCard
+        perfil={perfil({
+          condiciones_medicas: [
+            { id_condicion: 2, nombre: "Diabetes", detalle: "tipo 2" },
+            { id_condicion: null, nombre: "Gota", detalle: null },
+          ],
+          restricciones_alimentarias: [
+            {
+              id_restriccion: 6,
+              tipo: "aversion",
+              nombre: "Pescado",
+              detalle: null,
+            },
+          ],
+        })}
+        onChange={vi.fn()}
+      />
+    )
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await user.selectOptions(
+      await screen.findByLabelText("Sexo biológico"),
+      "femenino"
+    )
+    await user.selectOptions(screen.getByLabelText("Actividad"), "3")
+    await user.selectOptions(screen.getByLabelText("Objetivo"), "otro")
+    await user.type(
+      screen.getByLabelText("Objetivo propio"),
+      "Preparar una maratón"
+    )
+    await user.click(screen.getByRole("checkbox", { name: "Celiaquía" }))
+    await user.type(screen.getByLabelText("Otra restricción"), "Sésamo")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    const cambios = vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+    expect(cambios).toMatchObject({
+      sexo_biologico: "femenino",
+      id_nivel_actividad: 3,
+      objetivo_personalizado: "Preparar una maratón",
+    })
+    expect(cambios).not.toHaveProperty("fecha_nacimiento")
+    expect(cambios).not.toHaveProperty("id_objetivo")
+    // La condición propia y el detalle de la del catálogo se conservan.
+    expect(cambios.condiciones_medicas).toEqual([
+      { id_condicion: 2, detalle: "tipo 2" },
+      { id_condicion: 1 },
+      { nombre_personalizado: "Gota" },
+    ])
+    expect(cambios.restricciones_alimentarias).toEqual([
+      { id_restriccion: 6 },
+      { tipo_personalizado: "alergia", nombre_personalizado: "Sésamo" },
+    ])
   })
 })

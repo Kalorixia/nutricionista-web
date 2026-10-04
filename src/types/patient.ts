@@ -49,14 +49,36 @@ export interface CalculoNutricional {
 }
 
 export interface CondicionPerfil {
+  /** Null cuando es una condición escrita a mano. */
+  id_condicion?: number | null
   nombre: string
   detalle: string | null
 }
 
 export interface RestriccionPerfil {
+  /** Null cuando es una restricción escrita a mano. */
+  id_restriccion?: number | null
   tipo: string | null
   nombre: string
   detalle: string | null
+}
+
+export type TipoRestriccion = "alergia" | "intolerancia" | "aversion"
+
+export interface OpcionRegistro {
+  id: number
+  nombre: string
+  codigo?: string
+  tipo?: string
+  descripcion?: string | null
+}
+
+/** GET /pacientes/catalogos/registro: las opciones del perfil clínico. */
+export interface CatalogosRegistro {
+  objetivos: OpcionRegistro[]
+  niveles_actividad: OpcionRegistro[]
+  condiciones_medicas: OpcionRegistro[]
+  restricciones_alimentarias: OpcionRegistro[]
 }
 
 export interface PerfilPaciente {
@@ -77,13 +99,29 @@ export interface PerfilPaciente {
   onboarding_completado: boolean
 }
 
+/**
+ * Lo que el nutricionista puede corregir (KAL-131-07). Nombre y fecha de
+ * nacimiento no: el backend los rechaza con 422. Las listas reemplazan a las
+ * guardadas.
+ */
 export interface ActualizarPerfilInput {
   peso_kg?: number
   altura_cm?: number
-  fecha_nacimiento?: string
   sexo_biologico?: "femenino" | "masculino"
   id_objetivo?: number
+  objetivo_personalizado?: string
   id_nivel_actividad?: number
+  condiciones_medicas?: {
+    id_condicion?: number
+    nombre_personalizado?: string
+    detalle?: string
+  }[]
+  restricciones_alimentarias?: {
+    id_restriccion?: number
+    tipo_personalizado?: TipoRestriccion
+    nombre_personalizado?: string
+    detalle?: string
+  }[]
 }
 
 /** Todo opcional: lo que se manda pisa el cálculo, el objeto vacío lo borra. */
