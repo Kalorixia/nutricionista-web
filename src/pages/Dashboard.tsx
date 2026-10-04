@@ -34,7 +34,7 @@ function StatCard({
       <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
         <Icon className="h-5 w-5" />
       </div>
-      <div className="hero-gradient rounded-3xl border border-primary/10 p-6 sm:p-8">
+      <div>
         {value === "dev" ? (
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <Construction className="h-3.5 w-3.5" /> En desarrollo
