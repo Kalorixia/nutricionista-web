@@ -62,6 +62,10 @@ export interface PlanificacionDetalle {
     accion: "agregar_item" | "quitar_item" | "editar_cabecera"
   } | null
   ediciones?: number
+  /** Lo que el profesional le escribe al paciente (KAL-132-02). */
+  indicaciones_generales?: string | null
+  /** Notas por comida, con clave "Día|Momento". */
+  notas_comidas?: Record<string, string>
 }
 
 /** PATCH /planificaciones/{id}: lo que no se manda no se toca. */
@@ -71,6 +75,9 @@ export interface ActualizarPlanificacionInput {
   fecha_inicio?: string | null
   fecha_fin?: string | null
   objetivos?: ObjetivosPlanInput
+  indicaciones_generales?: string
+  /** Parche: null o vacío borra la nota de esa comida. */
+  notas_comidas?: Record<string, string | null>
 }
 
 /**

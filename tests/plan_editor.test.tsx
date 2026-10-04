@@ -480,3 +480,52 @@ describe("Edición de un plan publicado (KAL-131-08)", () => {
     expect(await screen.findByText("Semana corregida")).toBeTruthy()
   })
 })
+
+describe("Indicaciones y notas para el paciente (KAL-132-02)", () => {
+  it("guarda una nota de comida y la muestra", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(structuredClone(plan))
+    vi.mocked(mealPlansService.update).mockResolvedValue({
+      ...plan,
+      notas_comidas: { "Lunes|Desayuno": "Con un vaso de agua." },
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: "Nota de Lunes Desayuno" })
+    )
+    await user.type(
+      await screen.findByLabelText("Nota para esta comida"),
+      "Con un vaso de agua."
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(mealPlansService.update).toHaveBeenCalledWith(7, {
+        notas_comidas: { "Lunes|Desayuno": "Con un vaso de agua." },
+      })
+    )
+    expect(await screen.findByText("Con un vaso de agua.")).toBeTruthy()
+  })
+
+  it("edita las indicaciones generales", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(structuredClone(plan))
+    vi.mocked(mealPlansService.update).mockResolvedValue({
+      ...plan,
+      indicaciones_generales: "Tomá 2 litros de agua.",
+    })
+    mount()
+    const tarjeta = await screen.findByLabelText("Indicaciones generales")
+    await user.click(within(tarjeta).getByRole("button", { name: /Agregar/ }))
+    await user.type(
+      await screen.findByLabelText("Indicaciones para el paciente"),
+      "Tomá 2 litros de agua."
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(mealPlansService.update).toHaveBeenCalledWith(7, {
+        indicaciones_generales: "Tomá 2 litros de agua.",
+      })
+    )
+    expect(await screen.findByText("Tomá 2 litros de agua.")).toBeTruthy()
+  })
+})

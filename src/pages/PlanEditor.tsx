@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import {
   ArrowLeft,
   Loader2,
+  NotebookPen,
   Pencil,
   Plus,
   RefreshCw,
@@ -17,6 +18,7 @@ import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
 import { GenerationMetrics } from "@/components/modules/plans/GenerationMetrics"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
 import { PlanHeaderDialog } from "@/components/modules/plans/PlanHeaderDialog"
+import { TextEditDialog } from "@/components/modules/plans/TextEditDialog"
 import { useConfirm } from "@/components/common/ConfirmDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
@@ -70,6 +72,11 @@ export default function PlanEditor() {
   const confirm = useConfirm()
   const edicion_confirmada = useRef(false)
   const [header_open, set_header_open] = useState(false)
+  const [indicaciones_open, set_indicaciones_open] = useState(false)
+  const [nota_abierta, set_nota_abierta] = useState<{
+    dia: string
+    momento: string
+  } | null>(null)
   const [preview, set_preview] = useState<{
     item: PlanificacionRecetaItem
     dia: string
@@ -438,6 +445,86 @@ export default function PlanEditor() {
         />
       )}
 
+      {indicaciones_open && (
+        <TextEditDialog
+          titulo="Indicaciones generales"
+          etiqueta="Indicaciones para el paciente"
+          ayuda="Hidratación, horarios, actividad, recomendaciones."
+          inicial={plan.indicaciones_generales ?? ""}
+          maximo={4000}
+          busy={busy}
+          onClose={() => set_indicaciones_open(false)}
+          onSave={(texto) =>
+            void mutate_plan(async () => {
+              const result = await mealPlansService.update(idPlan, {
+                indicaciones_generales: texto,
+              })
+              if (active_id.current === idPlan) {
+                setPlan(result)
+                set_indicaciones_open(false)
+              }
+              toast.success("Indicaciones guardadas")
+            })
+          }
+        />
+      )}
+      {nota_abierta && (
+        <TextEditDialog
+          titulo={`Nota — ${nota_abierta.dia} / ${nota_abierta.momento}`}
+          etiqueta="Nota para esta comida"
+          ayuda="Por ejemplo: si no tenés tiempo, reemplazá por…"
+          inicial={
+            plan.notas_comidas?.[
+              `${nota_abierta.dia}|${nota_abierta.momento}`
+            ] ?? ""
+          }
+          maximo={500}
+          busy={busy}
+          onClose={() => set_nota_abierta(null)}
+          onSave={(texto) =>
+            void mutate_plan(async () => {
+              const clave = `${nota_abierta.dia}|${nota_abierta.momento}`
+              const result = await mealPlansService.update(idPlan, {
+                notas_comidas: { [clave]: texto || null },
+              })
+              if (active_id.current === idPlan) {
+                setPlan(result)
+                set_nota_abierta(null)
+              }
+              toast.success(texto ? "Nota guardada" : "Nota borrada")
+            })
+          }
+        />
+      )}
+
+      <Card className="space-y-2 p-4" aria-label="Indicaciones generales">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-sm font-medium">Indicaciones generales</h2>
+          {!read_only && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => set_indicaciones_open(true)}
+              className="h-7 gap-1 px-2 text-xs"
+            >
+              <Pencil className="h-3 w-3" />
+              {plan.indicaciones_generales ? "Editar" : "Agregar"}
+            </Button>
+          )}
+        </div>
+        {plan.indicaciones_generales ? (
+          <p className="text-sm whitespace-pre-line">
+            {plan.indicaciones_generales}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sin indicaciones. Agregá hidratación, horarios o recomendaciones
+            para el paciente.
+          </p>
+        )}
+      </Card>
+
       {read_only && (
         <p role="status" className="text-sm text-muted-foreground">
           Este plan está en modo de sólo lectura.
@@ -580,16 +667,33 @@ export default function PlanEditor() {
                         </div>
                       ))}
                     </div>
+                    {plan.notas_comidas?.[`${dia}|${momento}`] && (
+                      <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-xs whitespace-pre-line dark:bg-amber-950/30">
+                        {plan.notas_comidas[`${dia}|${momento}`]}
+                      </p>
+                    )}
                     {!read_only && (
-                      <Button
-                        disabled={busy}
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openPicker(dia, momento)}
-                        className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-                      >
-                        <Plus className="h-3 w-3" /> Agregar receta
-                      </Button>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          disabled={busy}
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openPicker(dia, momento)}
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        >
+                          <Plus className="h-3 w-3" /> Agregar receta
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Nota de ${dia} ${momento}`}
+                          onClick={() => set_nota_abierta({ dia, momento })}
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        >
+                          <NotebookPen className="h-3 w-3" /> Nota
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )
