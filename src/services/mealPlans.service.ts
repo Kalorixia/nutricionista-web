@@ -2,6 +2,8 @@ import { authedFetch } from "@/services/http"
 import type {
   GeneracionPlan,
   ListaCompra,
+  ParametrosPlan,
+  ParametrosPlanInput,
   Planificacion,
   PlanificacionDetalle,
 } from "@/types/mealPlan"
@@ -10,7 +12,7 @@ interface ListaPlanificacionesResponse {
   planificaciones: Planificacion[]
 }
 
-export interface CrearPlanificacionInput {
+export interface CrearPlanificacionInput extends ParametrosPlanInput {
   id_paciente: number
   nombre: string
   descripcion?: string
@@ -31,12 +33,31 @@ export const mealPlansService = {
    * sigue con `generationStatus`.
    */
   async generate(
-    input: CrearPlanificacionInput & { indicaciones?: string; momentos?: string[] }
+    input: CrearPlanificacionInput & {
+      indicaciones?: string
+      momentos?: string[]
+    }
   ): Promise<GeneracionPlan> {
     return authedFetch<GeneracionPlan>("/copiloto/borradores", {
       method: "POST",
       body: input,
     })
+  },
+
+  /**
+   * Objetivos sugeridos para un plan nuevo. Sin objetivo ni actividad, los del
+   * paciente; con otros, los recalcula el servidor. No persiste nada.
+   */
+  async parameters(
+    idPaciente: number,
+    options: { id_objetivo?: number; id_nivel_actividad?: number } = {}
+  ): Promise<ParametrosPlan> {
+    const params = new URLSearchParams({ id_paciente: String(idPaciente) })
+    if (options.id_objetivo)
+      params.set("id_objetivo", String(options.id_objetivo))
+    if (options.id_nivel_actividad)
+      params.set("id_nivel_actividad", String(options.id_nivel_actividad))
+    return authedFetch<ParametrosPlan>(`/planificaciones/parametros?${params}`)
   },
 
   async generationStatus(idGeneracion: number): Promise<GeneracionPlan> {

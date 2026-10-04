@@ -20,8 +20,13 @@ import { useConfirm } from "@/components/common/ConfirmDialog"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { useGenerations } from "@/hooks/use-generations"
 import { patientsService } from "@/services/patients.service"
+import { PlanTargetsSection } from "@/components/modules/plans/PlanTargetsSection"
 import { MOMENTOS_COMIDA } from "@/types/mealPlan"
-import type { EstadoPlanificacion, Planificacion } from "@/types/mealPlan"
+import type {
+  EstadoPlanificacion,
+  ParametrosPlanInput,
+  Planificacion,
+} from "@/types/mealPlan"
 import type { PacienteVinculado } from "@/types/patient"
 
 const ESTADO_LABEL: Record<EstadoPlanificacion, string> = {
@@ -55,6 +60,7 @@ export default function Planning() {
   const [saving, setSaving] = useState(false)
   const [instructions, set_instructions] = useState("")
   const [momentos, set_momentos] = useState<string[]>([...MOMENTOS_COMIDA])
+  const [targets, set_targets] = useState<ParametrosPlanInput>({})
   const { track } = useGenerations()
   const [load_error, set_load_error] = useState<string | null>(null)
   const [patients_error, set_patients_error] = useState<string | null>(null)
@@ -129,6 +135,7 @@ export default function Planning() {
         id_paciente: Number(idPaciente),
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
+        ...targets,
       }
       // Con IA el pedido es asíncrono: se cierra el diálogo y el profesional
       // sigue trabajando. El aviso llega cuando el borrador está listo.
@@ -289,7 +296,7 @@ export default function Planning() {
         open={creating}
         onOpenChange={(open) => !saving && setCreating(open)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nuevo plan de alimentación</DialogTitle>
           </DialogHeader>
@@ -345,6 +352,12 @@ export default function Planning() {
                 className="min-h-[70px]"
               />
             </div>
+            <PlanTargetsSection
+              key={idPaciente}
+              idPaciente={idPaciente ? Number(idPaciente) : null}
+              disabled={saving}
+              onChange={set_targets}
+            />
             <div>
               <Label>Comidas del plan</Label>
               <p className="mb-2 text-xs text-muted-foreground">

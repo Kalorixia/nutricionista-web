@@ -53,14 +53,56 @@ export interface PlanificacionDetalle {
     totales: NutritionTotals | null
     diferencia_objetivo: NutritionTotals | null
   }[]
-  objetivos_nutricionales?: {
-    get_objetivo_kcal: number
-    proteinas_g: number
-    grasas_g: number
-    carbohidratos_g: number
-    hidratacion_ml: number
-  } | null
+  objetivos_nutricionales?: ObjetivosPlan | null
   generacion_ia?: GeneracionIA | null
+}
+
+/**
+ * Objetivos contra los que se mide un plan. Los planes nuevos guardan los
+ * suyos; `ajustado_para_plan` dice qué cambió el profesional respecto de lo que
+ * proponía la fórmula (`sugerido_para_plan`).
+ */
+export interface ObjetivosPlan {
+  get_objetivo_kcal: number
+  proteinas_g: number
+  grasas_g: number
+  carbohidratos_g: number
+  hidratacion_ml?: number | null
+  prescrito_por_profesional?: string[]
+  ajustado_para_plan?: string[]
+  sugerido_para_plan?: Record<string, number>
+}
+
+export interface OpcionCatalogo {
+  id: number
+  nombre: string
+  codigo?: string
+}
+
+/** GET /planificaciones/parametros */
+export interface ParametrosPlan {
+  id_paciente: number
+  objetivo: OpcionCatalogo | null
+  nivel_actividad: OpcionCatalogo | null
+  objetivos: ObjetivosPlan | null
+  del_paciente: boolean
+  opciones_objetivo: OpcionCatalogo[]
+  opciones_nivel_actividad: OpcionCatalogo[]
+}
+
+/** Lo que el profesional fija para un plan nuevo. No toca el perfil. */
+export interface ObjetivosPlanInput {
+  get_objetivo_kcal: number
+  proteinas_g: number
+  grasas_g: number
+  carbohidratos_g?: number
+}
+
+export interface ParametrosPlanInput {
+  id_objetivo?: number
+  id_nivel_actividad?: number
+  objetivos?: ObjetivosPlanInput
+  guardar_como_prescripcion?: boolean
 }
 
 /**
@@ -72,10 +114,7 @@ export interface PlanificacionDetalle {
  * no está verificado por el sistema. Los dos se muestran antes de aprobar.
  */
 export type EstadoGeneracion =
-  | "pendiente"
-  | "procesando"
-  | "completada"
-  | "fallida"
+  "pendiente" | "procesando" | "completada" | "fallida"
 
 /** Pedido de borrador al Copiloto. Se resuelve en segundo plano. */
 export interface GeneracionPlan {

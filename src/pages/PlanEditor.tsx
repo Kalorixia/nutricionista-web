@@ -421,6 +421,25 @@ export default function PlanEditor() {
         </Card>
       )}
 
+      {plan.objetivos_nutricionales && (
+        <Card className="p-4 text-sm" aria-label="Objetivos del plan">
+          <p>
+            <span className="font-medium">Objetivos del plan:</span>{" "}
+            {Math.round(plan.objetivos_nutricionales.get_objetivo_kcal)} kcal ·
+            Proteínas {Math.round(plan.objetivos_nutricionales.proteinas_g)} g ·
+            Carbohidratos{" "}
+            {Math.round(plan.objetivos_nutricionales.carbohidratos_g)} g ·
+            Grasas {Math.round(plan.objetivos_nutricionales.grasas_g)} g
+          </p>
+          {(plan.objetivos_nutricionales.ajustado_para_plan?.length ?? 0) >
+            0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ajustados para este plan; el perfil del paciente no cambió.
+            </p>
+          )}
+        </Card>
+      )}
+
       <div className="space-y-4">
         {DIAS_SEMANA.map((dia) => (
           <Card key={dia} className="p-4">

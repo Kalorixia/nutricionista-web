@@ -15,6 +15,7 @@ vi.mock("@/services/mealPlans.service", () => ({
     list: vi.fn(),
     create: vi.fn(),
     generate: vi.fn(),
+    parameters: vi.fn(),
     remove: vi.fn(),
     archive: vi.fn(),
     activeGenerations: vi.fn(),
@@ -26,8 +27,38 @@ vi.mock("@/services/patients.service", () => ({
 }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
+const OPCIONES = {
+  opciones_objetivo: [
+    {
+      id: 2,
+      codigo: "aumentar_masa_muscular",
+      nombre: "Aumentar masa muscular",
+    },
+    { id: 3, codigo: "mantener_peso", nombre: "Mantener el peso" },
+  ],
+  opciones_nivel_actividad: [
+    { id: 1, nombre: "Sedentario" },
+    { id: 3, nombre: "Moderado" },
+  ],
+}
+
+const DEL_PACIENTE = {
+  id_paciente: 3,
+  objetivo: OPCIONES.opciones_objetivo[1],
+  nivel_actividad: OPCIONES.opciones_nivel_actividad[1],
+  objetivos: {
+    get_objetivo_kcal: 2044.4,
+    proteinas_g: 140,
+    grasas_g: 56.8,
+    carbohidratos_g: 243.3,
+  },
+  del_paciente: true,
+  ...OPCIONES,
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(mealPlansService.parameters).mockResolvedValue(DEL_PACIENTE)
   vi.mocked(mealPlansService.list).mockResolvedValue([])
   vi.mocked(mealPlansService.activeGenerations).mockResolvedValue([])
   vi.mocked(patientsService.listarPacientes).mockResolvedValue({
@@ -137,4 +168,76 @@ it("exige confirmación al eliminar y conserva el plan si falla", async () => {
   )
   await waitFor(() => expect(mealPlansService.remove).toHaveBeenCalledOnce())
   expect(screen.getByText("Plan de prueba")).toBeTruthy()
+})
+
+it("precarga los objetivos del paciente y los envía con el plan", async () => {
+  const user = userEvent.setup()
+  vi.mocked(mealPlansService.create).mockResolvedValue({
+    id_planificacion: 7,
+  } as Awaited<ReturnType<typeof mealPlansService.create>>)
+  mount()
+  await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+  await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+  expect(await screen.findByDisplayValue("2044")).toBeTruthy()
+  expect(mealPlansService.parameters).toHaveBeenCalledWith(3, {})
+  await user.type(screen.getByLabelText("Nombre del plan"), "Semana")
+  await user.click(screen.getByRole("button", { name: "Crear manual" }))
+  await screen.findByText("Editor del borrador")
+  expect(mealPlansService.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id_objetivo: 3,
+      id_nivel_actividad: 3,
+      objetivos: {
+        get_objetivo_kcal: 2044,
+        proteinas_g: 140,
+        grasas_g: 57,
+        carbohidratos_g: 243,
+      },
+      guardar_como_prescripcion: false,
+    })
+  )
+})
+
+it("al cambiar el objetivo pide el recálculo al servidor", async () => {
+  const user = userEvent.setup()
+  vi.mocked(mealPlansService.parameters)
+    .mockResolvedValueOnce(DEL_PACIENTE)
+    .mockResolvedValueOnce({
+      ...DEL_PACIENTE,
+      objetivo: OPCIONES.opciones_objetivo[0],
+      objetivos: {
+        get_objetivo_kcal: 2938.9,
+        proteinas_g: 140,
+        grasas_g: 81.6,
+        carbohidratos_g: 411,
+      },
+      del_paciente: false,
+    })
+  mount()
+  await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+  await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+  await screen.findByDisplayValue("2044")
+  await user.selectOptions(screen.getByLabelText("Objetivo"), "2")
+  expect(await screen.findByDisplayValue("2939")).toBeTruthy()
+  expect(mealPlansService.parameters).toHaveBeenLastCalledWith(3, {
+    id_objetivo: 2,
+    id_nivel_actividad: 3,
+  })
+  expect(
+    screen.getByRole("button", { name: /Volver a los del paciente/ })
+  ).toBeTruthy()
+})
+
+it("completa los carbohidratos al cambiar la energía", async () => {
+  const user = userEvent.setup()
+  mount()
+  await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+  await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+  const kcal = await screen.findByDisplayValue("2044")
+  await user.clear(kcal)
+  await user.type(kcal, "2444")
+  // (2444 - 4*140 - 9*57) / 4 = 342.75
+  expect(
+    (screen.getByLabelText("Carbohidratos (g)") as HTMLInputElement).value
+  ).toBe("343")
 })
