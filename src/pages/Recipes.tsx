@@ -54,7 +54,7 @@ export default function Recipes() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="hero-gradient rounded-3xl border border-primary/10 p-6 sm:p-8">
         <h1 className="text-brand-dark font-heading text-3xl font-bold">
           Recetas
         </h1>
@@ -63,13 +63,13 @@ export default function Recipes() {
         </p>
       </div>
 
-      <div className="relative max-w-md">
+      <div className="relative max-w-xl">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar por nombre o categoría…"
-          className="rounded-xl pl-9"
+          className="surface-raised h-11 rounded-xl pl-9"
         />
       </div>
 
@@ -81,7 +81,7 @@ export default function Recipes() {
             {recetas.map((r) => (
               <Card
                 key={r.id_receta}
-                className="card-shadow hover:card-shadow-hover h-full overflow-hidden p-0 transition-shadow"
+                className="card-shadow hover:card-shadow-hover h-full overflow-hidden border-primary/10 p-0 transition-all hover:-translate-y-1"
               >
                 <Link to={`/recetas/${r.id_receta}`}>
                   {r.imagen_url ? (
@@ -104,8 +104,8 @@ export default function Recipes() {
                     )}
                     <div className="mt-3 flex items-center justify-between">
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5" />{" "}
-                        {r.tiempo_preparacion} min
+                        <Clock className="h-3.5 w-3.5" /> {r.tiempo_preparacion}{" "}
+                        min
                       </span>
                       {r.dificultad && (
                         <Badge variant="secondary">{r.dificultad}</Badge>

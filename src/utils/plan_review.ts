@@ -38,17 +38,6 @@ export function review_summary(plan: PlanificacionDetalle) {
     missing,
     outside,
     unverified,
-    description:
-      `${plan.nombre} para ${plan.nombre_paciente}. ${plan.recetas.length} comidas, ${assigned.size} de 28 momentos cubiertos. ` +
-      (missing.length
-        ? `Faltan: ${missing.join(", ")}. `
-        : "La grilla semanal está completa. ") +
-      (outside.length
-        ? `${outside.length} comidas fuera de la grilla requieren revisión. `
-        : "") +
-      (unverified.length
-        ? `El sistema no pudo verificar: ${unverified.join(" ")} `
-        : "") +
-      "Al aprobar y publicar, el paciente podrá ver el plan y dejará de ser editable.",
+    description: `${plan.nombre} para ${plan.nombre_paciente}. ${plan.recetas.length} comidas, ${assigned.size} de 28 momentos cubiertos.`,
   }
 }

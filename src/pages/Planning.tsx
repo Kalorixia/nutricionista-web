@@ -91,9 +91,8 @@ export default function Planning() {
 
   useEffect(() => {
     void (async () => {
-      await load()
+      await Promise.all([load(), load_patients()])
     })()
-    void load_patients()
   }, [])
 
   // Entrada desde PatientDetail.tsx: "Crear plan para este paciente".
@@ -224,11 +223,11 @@ export default function Planning() {
           <Button onClick={load}>Reintentar</Button>
         </Card>
       ) : (
-        <Card className="divide-y divide-border">
+        <Card className="surface-raised divide-y divide-border overflow-hidden">
           {plans.map((plan) => (
             <div
               key={plan.id_planificacion}
-              className="flex items-center gap-3 p-4"
+              className="flex flex-wrap items-center gap-3 p-4 transition-colors hover:bg-secondary/30"
             >
               <div className="min-w-0 flex-1">
                 <Link

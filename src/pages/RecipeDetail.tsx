@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, ChefHat, Clock, Flame, Loader2, Users } from "lucide-react"
+import {
+  ArrowLeft,
+  ChefHat,
+  Clock,
+  Flame,
+  ImageOff,
+  Loader2,
+  Users,
+} from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +26,7 @@ export default function RecipeDetail() {
   const [receta, setReceta] = useState<RecetaDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [image_error, set_image_error] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -54,7 +63,7 @@ export default function RecipeDetail() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -67,15 +76,24 @@ export default function RecipeDetail() {
         <AddToListButton recetaId={receta.id_receta} />
       </div>
 
-      {receta.imagen_url ? (
+      {(receta.imagenes[0] ?? receta.imagen_url) && !image_error ? (
         <img
-          src={receta.imagen_url}
+          src={receta.imagenes[0] ?? receta.imagen_url ?? undefined}
           alt={receta.nombre}
-          className="h-48 w-full rounded-2xl object-cover"
+          onError={() => set_image_error(true)}
+          className="aspect-[16/7] w-full rounded-3xl object-cover shadow-[var(--card-shadow)]"
         />
       ) : (
-        <div className="flex h-48 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-          <ChefHat className="h-12 w-12" />
+        <div
+          role="img"
+          aria-label={`Sin imagen para ${receta.nombre}`}
+          className="hero-gradient flex aspect-[16/7] w-full items-center justify-center rounded-3xl border text-muted-foreground"
+        >
+          {image_error ? (
+            <ImageOff className="h-12 w-12" />
+          ) : (
+            <ChefHat className="h-12 w-12" />
+          )}
         </div>
       )}
 
@@ -100,7 +118,9 @@ export default function RecipeDetail() {
             <Flame className="h-4 w-4" /> {receta.calorias_por_porcion} kcal
           </span>
         )}
-        {receta.dificultad && <Badge variant="secondary">{receta.dificultad}</Badge>}
+        {receta.dificultad && (
+          <Badge variant="secondary">{receta.dificultad}</Badge>
+        )}
       </div>
 
       {receta.categorias.length > 0 && (
@@ -114,7 +134,7 @@ export default function RecipeDetail() {
       )}
 
       {receta.ingredientes.length > 0 && (
-        <Card className="p-5">
+        <Card className="surface-raised border-primary/10 p-5">
           <h2 className="mb-3 font-heading text-lg font-semibold">
             Ingredientes
           </h2>
@@ -143,7 +163,7 @@ export default function RecipeDetail() {
       )}
 
       {receta.pasos.length > 0 && (
-        <Card className="p-5">
+        <Card className="surface-raised border-primary/10 p-5">
           <h2 className="mb-3 font-heading text-lg font-semibold">
             Preparación
           </h2>

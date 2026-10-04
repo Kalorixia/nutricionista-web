@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react"
-import {
-  CalendarRange,
-  Construction,
-  Loader2,
-  Users,
-  Zap,
-} from "lucide-react"
+import { CalendarRange, Construction, Loader2, Users, Zap } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/hooks/use-auth"
 import { patientsService } from "@/services/patients.service"
 import { mealPlansService } from "@/services/mealPlans.service"
-import { nutritionistService, type ActividadItem } from "@/services/nutritionist.service"
+import {
+  nutritionistService,
+  type ActividadItem,
+} from "@/services/nutritionist.service"
 import { formatDateTime } from "@/utils/format"
 import { isNotImplemented } from "@/utils/errors"
 
@@ -33,7 +30,7 @@ function StatCard({
   value: StatValue
 }) {
   return (
-    <Card className="flex items-center gap-3 p-5">
+    <Card className="surface-raised flex items-center gap-3 border-primary/10 p-5 transition-transform hover:-translate-y-0.5">
       <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
         <Icon className="h-5 w-5" />
       </div>
@@ -108,8 +105,16 @@ export default function Dashboard() {
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard icon={Users} label="Pacientes vinculados" value={stats.pacientes} />
-          <StatCard icon={Zap} label="Códigos activos" value={stats.codigosActivos} />
+          <StatCard
+            icon={Users}
+            label="Pacientes vinculados"
+            value={stats.pacientes}
+          />
+          <StatCard
+            icon={Zap}
+            label="Códigos activos"
+            value={stats.codigosActivos}
+          />
           <StatCard
             icon={CalendarRange}
             label="Planes publicados"
@@ -118,7 +123,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Card className="divide-y divide-border">
+      <Card className="surface-raised divide-y divide-border overflow-hidden">
         <div className="p-4">
           <h2 className="font-heading text-sm font-semibold">
             Actividad reciente
