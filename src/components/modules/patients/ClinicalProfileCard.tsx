@@ -38,6 +38,17 @@ export function ClinicalProfileCard({
   const prescritos = calculo?.prescrito_por_profesional ?? []
   const kcal_prescritas = prescritos.includes("get_objetivo_kcal")
   const sugerido = calculo?.calculado?.get_objetivo_kcal
+  // Un objetivo propio no tiene fórmula: el paciente queda sin energía
+  // objetivo hasta que el profesional la prescribe (KAL-131-06).
+  const objetivo_propio = perfil.objetivo_personalizado ?? null
+  const datos_completos =
+    perfil.peso_kg != null &&
+    perfil.altura_cm != null &&
+    perfil.fecha_nacimiento != null &&
+    perfil.sexo_biologico != null &&
+    perfil.nivel_actividad != null
+  const puede_prescribir =
+    calculo != null || (objetivo_propio != null && datos_completos)
 
   const guardar = async (accion: () => Promise<PerfilPaciente>) => {
     if (guardando) return
@@ -75,7 +86,12 @@ export function ClinicalProfileCard({
       <div className="flex items-start justify-between gap-3">
         <h2 className="font-heading text-lg font-semibold">Perfil clínico</h2>
         {editando === null && (
-          <Button size="sm" variant="ghost" onClick={abrir_datos} className="gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={abrir_datos}
+            className="gap-1.5"
+          >
             <Pencil className="h-3.5 w-3.5" /> Editar datos
           </Button>
         )}
@@ -122,8 +138,14 @@ export function ClinicalProfileCard({
               className="w-28"
             />
           </div>
-          <Button type="submit" size="sm" disabled={guardando} className="gap-1.5">
-            {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Guardar
+          <Button
+            type="submit"
+            size="sm"
+            disabled={guardando}
+            className="gap-1.5"
+          >
+            {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{" "}
+            Guardar
           </Button>
           <Button
             type="button"
@@ -137,10 +159,25 @@ export function ClinicalProfileCard({
         </form>
       ) : (
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-          <Dato etiqueta="Peso" valor={perfil.peso_kg != null ? `${perfil.peso_kg} kg` : null} />
-          <Dato etiqueta="Altura" valor={perfil.altura_cm != null ? `${perfil.altura_cm} cm` : null} />
-          <Dato etiqueta="Objetivo" valor={perfil.objetivo?.nombre ?? null} />
-          <Dato etiqueta="Actividad" valor={perfil.nivel_actividad?.nombre ?? null} />
+          <Dato
+            etiqueta="Peso"
+            valor={perfil.peso_kg != null ? `${perfil.peso_kg} kg` : null}
+          />
+          <Dato
+            etiqueta="Altura"
+            valor={perfil.altura_cm != null ? `${perfil.altura_cm} cm` : null}
+          />
+          <Dato
+            etiqueta="Objetivo"
+            valor={
+              perfil.objetivo?.nombre ??
+              (objetivo_propio ? `Otro: ${objetivo_propio}` : null)
+            }
+          />
+          <Dato
+            etiqueta="Actividad"
+            valor={perfil.nivel_actividad?.nombre ?? null}
+          />
         </dl>
       )}
 
@@ -158,16 +195,23 @@ export function ClinicalProfileCard({
               </p>
             )}
           </div>
-          {editando === null && calculo && (
-            <Button size="sm" variant="ghost" onClick={abrir_objetivo} className="gap-1.5">
+          {editando === null && puede_prescribir && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={abrir_objetivo}
+              className="gap-1.5"
+            >
               <Pencil className="h-3.5 w-3.5" /> Prescribir
             </Button>
           )}
         </div>
 
-        {!calculo && (
+        {!calculo && editando !== "objetivo" && (
           <p className="mt-2 text-sm text-muted-foreground">
-            Faltan datos físicos del paciente para calcular sus objetivos.
+            {objetivo_propio && datos_completos
+              ? "El paciente eligió un objetivo propio, que no tiene fórmula. Prescribí la energía para calcular sus macros; mientras tanto, el Copiloto genera sin objetivo energético."
+              : "Faltan datos físicos del paciente para calcular sus objetivos."}
           </p>
         )}
 
@@ -201,8 +245,14 @@ export function ClinicalProfileCard({
                 {sugerido != null && ` (${Math.round(sugerido)} kcal)`}.
               </p>
             </div>
-            <Button type="submit" size="sm" disabled={guardando} className="gap-1.5">
-              {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Guardar
+            <Button
+              type="submit"
+              size="sm"
+              disabled={guardando}
+              className="gap-1.5"
+            >
+              {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{" "}
+              Guardar
             </Button>
             <Button
               type="button"
@@ -222,11 +272,27 @@ export function ClinicalProfileCard({
               etiqueta="Energía"
               valor={`${Math.round(calculo.get_objetivo_kcal)} kcal`}
               prescrito={kcal_prescritas}
-              sugerido={kcal_prescritas && sugerido != null ? `${Math.round(sugerido)} kcal` : null}
+              sugerido={
+                kcal_prescritas && sugerido != null
+                  ? `${Math.round(sugerido)} kcal`
+                  : null
+              }
             />
-            <Dato etiqueta="Proteínas" valor={`${Math.round(calculo.proteinas_g)} g`} prescrito={prescritos.includes("proteinas_g")} />
-            <Dato etiqueta="Carbohidratos" valor={`${Math.round(calculo.carbohidratos_g)} g`} prescrito={prescritos.includes("carbohidratos_g")} />
-            <Dato etiqueta="Grasas" valor={`${Math.round(calculo.grasas_g)} g`} prescrito={prescritos.includes("grasas_g")} />
+            <Dato
+              etiqueta="Proteínas"
+              valor={`${Math.round(calculo.proteinas_g)} g`}
+              prescrito={prescritos.includes("proteinas_g")}
+            />
+            <Dato
+              etiqueta="Carbohidratos"
+              valor={`${Math.round(calculo.carbohidratos_g)} g`}
+              prescrito={prescritos.includes("carbohidratos_g")}
+            />
+            <Dato
+              etiqueta="Grasas"
+              valor={`${Math.round(calculo.grasas_g)} g`}
+              prescrito={prescritos.includes("grasas_g")}
+            />
           </dl>
         )}
       </div>

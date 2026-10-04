@@ -68,6 +68,8 @@ export interface PerfilPaciente {
   peso_kg: number | null
   altura_cm: number | null
   objetivo: { id: number; codigo: string; nombre: string } | null
+  /** Objetivo escrito por el paciente ("Otro"); excluyente con `objetivo`. */
+  objetivo_personalizado?: string | null
   nivel_actividad: { id: number; nombre: string } | null
   calculo_nutricional: CalculoNutricional | null
   condiciones_medicas: CondicionPerfil[]
