@@ -161,7 +161,9 @@ it("exige confirmación al eliminar y conserva el plan si falla", async () => {
   )
   const user = userEvent.setup()
   mount()
-  await user.click(await screen.findByRole("button", { name: "Eliminar" }))
+  await user.click(
+    await screen.findByRole("button", { name: "Eliminar Plan de prueba" })
+  )
   expect(mealPlansService.remove).not.toHaveBeenCalled()
   await user.click(
     within(await screen.findByRole("alertdialog")).getByRole("button", {

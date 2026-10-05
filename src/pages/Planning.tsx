@@ -8,6 +8,7 @@ import {
   Loader2,
   Plus,
   Send,
+  Trash2,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -15,6 +16,14 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useConfirm } from "@/components/common/ConfirmDialog"
+import { cn } from "@/lib/utils"
+import { formatDate } from "@/utils/format"
+import { SELECT_CLASS } from "@/utils/form_styles"
+import {
+  agrupar_por_paciente,
+  iniciales,
+  type GrupoPaciente,
+} from "@/utils/planes"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { useGenerations } from "@/hooks/use-generations"
 import { patientsService } from "@/services/patients.service"
@@ -46,6 +55,37 @@ const ESTADO_VARIANT: Record<
   borrador: "secondary",
   publicada: "default",
   archivada: "outline",
+}
+
+/** Con todos los pacientes a la vista, cuántos planes se muestran de cada uno. */
+const PLANES_POR_GRUPO = 3
+
+const clave_grupo = (grupo: GrupoPaciente) =>
+  String(grupo.id_paciente ?? grupo.nombre_paciente)
+
+function resumen_grupo(planes: Planificacion[]): string {
+  const cuenta = (estado: EstadoPlanificacion) =>
+    planes.filter((plan) => plan.estado === estado).length
+  return [
+    `${planes.length} ${planes.length === 1 ? "plan" : "planes"}`,
+    cuenta("borrador") &&
+      `${cuenta("borrador")} ${cuenta("borrador") === 1 ? "borrador" : "borradores"}`,
+    cuenta("publicada") &&
+      `${cuenta("publicada")} ${cuenta("publicada") === 1 ? "publicado" : "publicados"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+function Avatar({ nombre }: { nombre: string }) {
+  return (
+    <span
+      aria-hidden
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+    >
+      {iniciales(nombre)}
+    </span>
+  )
 }
 
 export default function Planning() {
@@ -128,6 +168,15 @@ export default function Planning() {
     })()
   }, [clave_completadas])
   const fallidas = recent.filter((item) => item.estado === "fallida")
+
+  // Planes agrupados por paciente, con filtro en la URL (?de=<paciente>) para
+  // que sobreviva a abrir un plan y volver.
+  const grupos = agrupar_por_paciente(plans)
+  const filtro = searchParams.get("de") ?? ""
+  const grupo_filtrado =
+    grupos.find((grupo) => clave_grupo(grupo) === filtro) ?? null
+  const filtrar = (valor: string) =>
+    setSearchParams(valor ? { de: valor } : {}, { replace: true })
   const nombre_paciente = (idPaciente: number) => {
     const paciente = pacientes.find((item) => item.id_paciente === idPaciente)
     return paciente ? `${paciente.nombre} ${paciente.apellido}` : "Paciente"
@@ -264,6 +313,72 @@ export default function Planning() {
         </Button>
       </div>
 
+      {(active.length > 0 || fallidas.length > 0) && (
+        <section className="space-y-2" aria-label="En preparación">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <Loader2
+              className={cn("h-4 w-4", active.length > 0 && "animate-spin")}
+            />
+            En preparación
+          </h2>
+          <Card className="divide-y divide-border overflow-hidden">
+            {active.map((generacion) => (
+              <div
+                key={`g-${generacion.id_generacion}`}
+                role="status"
+                aria-label={`Generando ${generacion.nombre || "borrador"}`}
+                className="flex flex-wrap items-center gap-3 bg-primary/5 p-4"
+              >
+                <Avatar nombre={nombre_paciente(generacion.id_paciente)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {nombre_paciente(generacion.id_paciente)}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {generacion.nombre || "Borrador del Copiloto"} ·{" "}
+                    {generacion.estado === "pendiente"
+                      ? "En cola"
+                      : "El Copiloto está armando la semana"}{" "}
+                    · <Transcurrido desde={generacion.created_at} />
+                  </p>
+                </div>
+                <Badge variant="secondary" className="gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {generacion.estado === "pendiente" ? "En cola" : "Generando"}
+                </Badge>
+              </div>
+            ))}
+            {fallidas.map((generacion) => (
+              <div
+                key={`f-${generacion.id_generacion}`}
+                className="flex flex-wrap items-center gap-3 bg-destructive/5 p-4"
+              >
+                <Avatar nombre={nombre_paciente(generacion.id_paciente)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {nombre_paciente(generacion.id_paciente)}
+                  </p>
+                  <p className="text-xs text-destructive">
+                    {generacion.nombre || "Borrador del Copiloto"} ·{" "}
+                    {generacion.error_mensaje || "No se pudo generar."}
+                  </p>
+                </div>
+                <Badge variant="destructive">Falló</Badge>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => dismiss(generacion.id_generacion)}
+                  className="gap-1"
+                  aria-label={`Descartar ${generacion.nombre || "borrador"}`}
+                >
+                  <X className="h-4 w-4" /> Descartar
+                </Button>
+              </div>
+            ))}
+          </Card>
+        </section>
+      )}
+
       {loading ? (
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       ) : load_error ? (
@@ -271,154 +386,205 @@ export default function Planning() {
           <p role="alert">{load_error}</p>
           <Button onClick={load}>Reintentar</Button>
         </Card>
+      ) : plans.length === 0 ? (
+        active.length === 0 &&
+        fallidas.length === 0 && (
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            Todavía no creaste ningún plan.
+          </Card>
+        )
       ) : (
-        <Card className="surface-raised divide-y divide-border overflow-hidden">
-          {active.map((generacion) => (
-            <div
-              key={`g-${generacion.id_generacion}`}
-              role="status"
-              aria-label={`Generando ${generacion.nombre || "borrador"}`}
-              className="flex flex-wrap items-center gap-3 bg-primary/5 p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">
-                  {generacion.nombre || "Borrador del Copiloto"}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {nombre_paciente(generacion.id_paciente)} ·{" "}
-                  {generacion.estado === "pendiente"
-                    ? "En cola"
-                    : "El Copiloto está armando la semana"}{" "}
-                  · <Transcurrido desde={generacion.created_at} />
-                </p>
-              </div>
-              <Badge variant="secondary" className="gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                {generacion.estado === "pendiente" ? "En cola" : "Generando"}
-              </Badge>
+        <section className="space-y-3" aria-label="Planes por paciente">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="text-brand-dark font-heading text-xl font-semibold">
+              Planes
+            </h2>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="filtro-paciente"
+                className="text-sm text-muted-foreground"
+              >
+                Paciente
+              </label>
+              <select
+                id="filtro-paciente"
+                value={grupo_filtrado ? filtro : ""}
+                onChange={(event) => filtrar(event.target.value)}
+                className={cn(SELECT_CLASS, "w-56")}
+              >
+                <option value="">Todos ({grupos.length})</option>
+                {[...grupos]
+                  .sort((a, b) =>
+                    a.nombre_paciente.localeCompare(b.nombre_paciente)
+                  )
+                  .map((grupo) => (
+                    <option key={clave_grupo(grupo)} value={clave_grupo(grupo)}>
+                      {grupo.nombre_paciente} ({grupo.planes.length})
+                    </option>
+                  ))}
+              </select>
             </div>
-          ))}
-          {fallidas.map((generacion) => (
-            <div
-              key={`f-${generacion.id_generacion}`}
-              className="flex flex-wrap items-center gap-3 bg-destructive/5 p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">
-                  {generacion.nombre || "Borrador del Copiloto"}
-                </p>
-                <p className="text-xs text-destructive">
-                  {nombre_paciente(generacion.id_paciente)} ·{" "}
-                  {generacion.error_mensaje || "No se pudo generar."}
-                </p>
-              </div>
-              <Badge variant="destructive">Falló</Badge>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => dismiss(generacion.id_generacion)}
-                className="gap-1"
-                aria-label={`Descartar ${generacion.nombre || "borrador"}`}
+          </div>
+
+          {(grupo_filtrado ? [grupo_filtrado] : grupos).map((grupo) => {
+            const visibles = grupo_filtrado
+              ? grupo.planes
+              : grupo.planes.slice(0, PLANES_POR_GRUPO)
+            return (
+              <Card
+                key={clave_grupo(grupo)}
+                className="overflow-hidden"
+                role="group"
+                aria-label={`Planes de ${grupo.nombre_paciente}`}
               >
-                <X className="h-4 w-4" /> Descartar
-              </Button>
-            </div>
-          ))}
-          {plans.map((plan) => (
-            <div
-              key={plan.id_planificacion}
-              className="flex flex-wrap items-center gap-3 p-4 transition-colors hover:bg-secondary/30"
-            >
-              <div className="min-w-0 flex-1">
-                <Link
-                  to={`/planificacion/${plan.id_planificacion}`}
-                  className="truncate font-medium hover:underline"
-                >
-                  {plan.nombre}
-                </Link>
-                <p className="truncate text-xs text-muted-foreground">
-                  {plan.nombre_paciente} · {plan.cantidad_recetas} recetas
-                </p>
-              </div>
-              {nuevos.has(plan.id_planificacion) && (
-                <Badge
-                  variant="outline"
-                  className="border-primary text-primary"
-                >
-                  Nuevo
-                </Badge>
-              )}
-              <Badge variant={ESTADO_VARIANT[plan.estado]}>
-                {ESTADO_LABEL[plan.estado]}
-              </Badge>
-              {plan.estado === "borrador" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  render={
-                    <Link to={`/planificacion/${plan.id_planificacion}`} />
-                  }
-                  className="gap-1 rounded-xl"
-                >
-                  <Send className="h-4 w-4" /> Revisar y publicar
-                </Button>
-              )}
-              {plan.estado === "publicada" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleArchive(plan)}
-                  disabled={busy_id !== null}
-                  className="gap-1 rounded-xl"
-                >
-                  <Archive className="h-4 w-4" /> Archivar
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  set_copia({
-                    modo: "duplicar",
-                    origen: plan,
-                    id_paciente: plan.id_paciente,
-                  })
-                }
-                disabled={busy_id !== null}
-                className="gap-1"
-                aria-label={`Duplicar ${plan.nombre}`}
-              >
-                <Copy className="h-4 w-4" /> Duplicar
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => set_copia({ modo: "plantilla", origen: plan })}
-                disabled={busy_id !== null}
-                className="gap-1"
-                aria-label={`Guardar ${plan.nombre} como plantilla`}
-              >
-                <BookmarkPlus className="h-4 w-4" /> Plantilla
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDelete(plan)}
-                disabled={busy_id !== null}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                Eliminar
-              </Button>
-            </div>
-          ))}
-          {plans.length === 0 &&
-            active.length === 0 &&
-            fallidas.length === 0 && (
-              <p className="p-6 text-center text-sm text-muted-foreground">
-                Todavía no creaste ningún plan.
-              </p>
-            )}
-        </Card>
+                <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/30 px-4 py-3">
+                  <Avatar nombre={grupo.nombre_paciente} />
+                  <div className="min-w-0 flex-1">
+                    {grupo.id_paciente ? (
+                      <Link
+                        to={`/pacientes/${grupo.id_paciente}`}
+                        className="font-semibold hover:underline"
+                      >
+                        {grupo.nombre_paciente}
+                      </Link>
+                    ) : (
+                      <p className="font-semibold">{grupo.nombre_paciente}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {resumen_grupo(grupo.planes)}
+                    </p>
+                  </div>
+                  {grupo.id_paciente && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() => {
+                        setIdPaciente(String(grupo.id_paciente))
+                        setCreating(true)
+                      }}
+                      aria-label={`Nuevo plan para ${grupo.nombre_paciente}`}
+                    >
+                      <Plus className="h-4 w-4" /> Plan
+                    </Button>
+                  )}
+                </div>
+                <div className="divide-y divide-border">
+                  {visibles.map((plan) => (
+                    <div
+                      key={plan.id_planificacion}
+                      className="flex flex-wrap items-center gap-2 px-4 py-3 transition-colors hover:bg-secondary/30"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          to={`/planificacion/${plan.id_planificacion}`}
+                          className="truncate font-medium hover:underline"
+                        >
+                          {plan.nombre}
+                        </Link>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {plan.cantidad_recetas} ítems
+                          {plan.fecha_publicacion
+                            ? ` · publicado el ${formatDate(plan.fecha_publicacion)}`
+                            : plan.created_at
+                              ? ` · creado el ${formatDate(plan.created_at)}`
+                              : ""}
+                        </p>
+                      </div>
+                      {nuevos.has(plan.id_planificacion) && (
+                        <Badge
+                          variant="outline"
+                          className="border-primary text-primary"
+                        >
+                          Nuevo
+                        </Badge>
+                      )}
+                      <Badge variant={ESTADO_VARIANT[plan.estado]}>
+                        {ESTADO_LABEL[plan.estado]}
+                      </Badge>
+                      {plan.estado === "borrador" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          render={
+                            <Link
+                              to={`/planificacion/${plan.id_planificacion}`}
+                            />
+                          }
+                          className="gap-1 rounded-xl"
+                        >
+                          <Send className="h-4 w-4" /> Revisar y publicar
+                        </Button>
+                      )}
+                      {plan.estado === "publicada" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleArchive(plan)}
+                          disabled={busy_id !== null}
+                          className="gap-1 rounded-xl"
+                        >
+                          <Archive className="h-4 w-4" /> Archivar
+                        </Button>
+                      )}
+                      <div className="flex items-center">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() =>
+                            set_copia({
+                              modo: "duplicar",
+                              origen: plan,
+                              id_paciente: plan.id_paciente,
+                            })
+                          }
+                          disabled={busy_id !== null}
+                          aria-label={`Duplicar ${plan.nombre}`}
+                          title="Duplicar"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() =>
+                            set_copia({ modo: "plantilla", origen: plan })
+                          }
+                          disabled={busy_id !== null}
+                          aria-label={`Guardar ${plan.nombre} como plantilla`}
+                          title="Guardar como plantilla"
+                        >
+                          <BookmarkPlus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(plan)}
+                          disabled={busy_id !== null}
+                          aria-label={`Eliminar ${plan.nombre}`}
+                          title="Eliminar"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {grupo.planes.length > visibles.length && (
+                  <button
+                    type="button"
+                    onClick={() => filtrar(clave_grupo(grupo))}
+                    className="w-full border-t border-border px-4 py-2 text-left text-sm text-primary hover:bg-secondary/30"
+                  >
+                    Ver los {grupo.planes.length} planes de{" "}
+                    {grupo.nombre_paciente}
+                  </button>
+                )}
+              </Card>
+            )
+          })}
+        </section>
       )}
 
       {!loading && !load_error && (
