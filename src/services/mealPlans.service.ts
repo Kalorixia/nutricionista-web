@@ -9,6 +9,7 @@ import type {
   Planificacion,
   PlanificacionDetalle,
   PlantillaResumen,
+  Seguimiento,
 } from "@/types/mealPlan"
 
 interface ListaPlanificacionesResponse {
@@ -130,6 +131,11 @@ export const mealPlansService = {
       plantillas: PlantillaResumen[]
     }>("/planificaciones/plantillas")
     return plantillas
+  },
+
+  /** Lo que registró el paciente sobre un plan propio (KAL-132-05). */
+  async followUp(id: number): Promise<Seguimiento> {
+    return authedFetch<Seguimiento>(`/planificaciones/${id}/seguimiento`)
   },
 
   async remove(id: number): Promise<void> {

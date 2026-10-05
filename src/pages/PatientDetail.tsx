@@ -19,6 +19,7 @@ import { formatDate } from "@/utils/format"
 import { isNotImplemented } from "@/utils/errors"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
+import { AdherenceCard } from "@/components/modules/patients/AdherenceCard"
 import type { PacienteDetalle, PerfilPaciente } from "@/types/patient"
 import type { Planificacion } from "@/types/mealPlan"
 
@@ -271,6 +272,13 @@ export default function PatientDetail() {
           </div>
         </div>
       </Card>
+
+      {!loadingPlanes && (
+        <AdherenceCard
+          key={planes.map((plan) => plan.id_planificacion).join(",")}
+          planes={planes}
+        />
+      )}
 
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">

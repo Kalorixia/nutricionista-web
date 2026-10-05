@@ -261,3 +261,44 @@ export const DIAS_SEMANA = [
 ]
 
 export const MOMENTOS_COMIDA = ["Desayuno", "Almuerzo", "Merienda", "Cena"]
+
+/** Seguimiento del cumplimiento registrado por el paciente (KAL-132-05). */
+export type EstadoRegistro = "cumplida" | "con_cambios" | "no_cumplida"
+
+export interface ItemRegistro {
+  id_receta: number
+  nombre: string
+}
+
+export interface ConteoCumplimiento {
+  esperadas: number
+  cumplidas: number
+  con_cambios: number
+  no_cumplidas: number
+  sin_registro: number
+  /** cumplidas / esperadas × 100; null sin comidas esperadas. */
+  porcentaje_cumplimiento: number | null
+}
+
+export interface Seguimiento {
+  id_planificacion: number
+  desde: string | null
+  hasta: string | null
+  ultima_fecha_registro: string | null
+  resumen: ConteoCumplimiento
+  semanas: (ConteoCumplimiento & { inicio: string; fin: string })[]
+  /** Del más reciente al más antiguo. */
+  dias: {
+    fecha: string
+    dia_semana: string
+    comidas: {
+      momento_comida: string
+      /** null: sin registro. */
+      estado: EstadoRegistro | null
+      comentario: string | null
+      no_me_gustaron: ItemRegistro[]
+      items: ItemRegistro[]
+    }[]
+  }[]
+  no_me_gustaron: (ItemRegistro & { veces: number })[]
+}
