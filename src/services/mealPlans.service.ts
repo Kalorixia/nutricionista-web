@@ -54,13 +54,19 @@ export const mealPlansService = {
    */
   async parameters(
     idPaciente: number,
-    options: { id_objetivo?: number; id_nivel_actividad?: number } = {}
+    options: {
+      id_objetivo?: number
+      id_nivel_actividad?: number
+      objetivo_personalizado?: string
+    } = {}
   ): Promise<ParametrosPlan> {
     const params = new URLSearchParams({ id_paciente: String(idPaciente) })
     if (options.id_objetivo)
       params.set("id_objetivo", String(options.id_objetivo))
     if (options.id_nivel_actividad)
       params.set("id_nivel_actividad", String(options.id_nivel_actividad))
+    if (options.objetivo_personalizado)
+      params.set("objetivo_personalizado", options.objetivo_personalizado)
     return authedFetch<ParametrosPlan>(`/planificaciones/parametros?${params}`)
   },
 

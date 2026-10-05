@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { UserEvent } from "@testing-library/user-event"
@@ -294,3 +294,115 @@ it("si la generación falla, queda en la lista con el motivo hasta descartarla",
   )
   expect(screen.queryByText(/alcanzó su límite de uso/)).toBeNull()
 }, 10000)
+
+describe("Objetivo propio del plan (KAL-132-06)", () => {
+  const MANTENIMIENTO = {
+    get_objetivo_kcal: 2044.4,
+    proteinas_g: 140,
+    grasas_g: 56.8,
+    carbohidratos_g: 243.3,
+  }
+
+  it("con Otro pide la referencia, la usa como base y envía el objetivo escrito", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.parameters)
+      .mockResolvedValueOnce(DEL_PACIENTE)
+      .mockResolvedValue({
+        ...DEL_PACIENTE,
+        objetivo: null,
+        objetivo_personalizado: "otro",
+        objetivos: null,
+        mantenimiento: MANTENIMIENTO,
+        del_paciente: false,
+      })
+    vi.mocked(mealPlansService.generate).mockResolvedValue({
+      id_generacion: 1,
+      id_paciente: 3,
+      estado: "pendiente",
+      id_planificacion: null,
+      nombre: "Maratón",
+      error_codigo: null,
+      error_mensaje: null,
+      created_at: "2026-10-05T12:00:00Z",
+      updated_at: "2026-10-05T12:00:00Z",
+    })
+    mount()
+    await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+    await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+    await screen.findByDisplayValue("2044")
+    await user.selectOptions(screen.getByLabelText("Objetivo"), "otro")
+    expect(mealPlansService.parameters).toHaveBeenLastCalledWith(3, {
+      objetivo_personalizado: "otro",
+      id_nivel_actividad: 3,
+    })
+    await screen.findByText(/Referencia de mantenimiento/)
+    // Sin fórmula los números quedan vacíos hasta que el profesional decida.
+    expect(
+      (screen.getByLabelText("Energía (kcal/día)") as HTMLInputElement).value
+    ).toBe("")
+    await user.type(screen.getByLabelText("Nombre del plan"), "Maratón")
+
+    await user.click(
+      screen.getByRole("button", { name: "Generar con Copiloto" })
+    )
+    expect(
+      screen.getByText("Escribí el objetivo del plan o elegí uno de la lista")
+    ).toBeTruthy()
+    expect(mealPlansService.generate).not.toHaveBeenCalled()
+
+    await user.type(
+      screen.getByLabelText("¿Cuál es el objetivo?"),
+      "Preparación para una maratón"
+    )
+    await user.click(screen.getByRole("button", { name: "Usar como base" }))
+    expect(
+      (screen.getByLabelText("Energía (kcal/día)") as HTMLInputElement).value
+    ).toBe("2044")
+    await user.click(
+      screen.getByRole("button", { name: "Generar con Copiloto" })
+    )
+    await waitFor(() => expect(mealPlansService.generate).toHaveBeenCalled())
+    const enviado = vi.mocked(mealPlansService.generate).mock.calls[0][0]
+    expect(enviado.objetivo_personalizado).toBe("Preparación para una maratón")
+    expect(enviado.id_objetivo).toBeUndefined()
+    expect(enviado.objetivos?.get_objetivo_kcal).toBe(2044)
+  })
+
+  it("si el paciente tiene un objetivo propio, el plan arranca con ese", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.parameters).mockResolvedValue({
+      ...DEL_PACIENTE,
+      objetivo: null,
+      objetivo_personalizado: "Recomposición corporal",
+    })
+    mount()
+    await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+    await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+    expect(
+      await screen.findByDisplayValue("Recomposición corporal")
+    ).toBeTruthy()
+    expect((screen.getByLabelText("Objetivo") as HTMLSelectElement).value).toBe(
+      "otro"
+    )
+  })
+
+  it("las comidas se eligen con botones y no deja generar sin ninguna", async () => {
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole("button", { name: "Nuevo plan" }))
+    await user.selectOptions(screen.getByLabelText("Paciente"), "3")
+    await user.type(screen.getByLabelText("Nombre del plan"), "Semana")
+    for (const momento of ["Desayuno", "Almuerzo", "Merienda", "Cena"])
+      await user.click(screen.getByRole("button", { name: momento }))
+    expect(
+      screen.getByRole("button", { name: "Cena" }).getAttribute("aria-pressed")
+    ).toBe("false")
+    await user.click(
+      screen.getByRole("button", { name: "Generar con Copiloto" })
+    )
+    expect(
+      screen.getByText("Elegí al menos una comida para el plan")
+    ).toBeTruthy()
+    expect(mealPlansService.generate).not.toHaveBeenCalled()
+  })
+})

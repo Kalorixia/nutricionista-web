@@ -57,6 +57,7 @@ export interface PlanificacionDetalle {
     diferencia_objetivo: NutritionTotals | null
   }[]
   objetivos_nutricionales?: ObjetivosPlan | null
+  objetivo_personalizado?: string | null
   generacion_ia?: GeneracionIA | null
   /** Última modificación después de publicar (KAL-131-08). Sólo para el profesional. */
   ultima_edicion?: {
@@ -132,6 +133,10 @@ export interface OpcionCatalogo {
 export interface ParametrosPlan {
   id_paciente: number
   objetivo: OpcionCatalogo | null
+  /** Objetivo propio ("Otro") que rige; excluyente con `objetivo` (KAL-132-06). */
+  objetivo_personalizado?: string | null
+  /** Sin fórmula (objetivo propio): energía y macros de mantenimiento como referencia. */
+  mantenimiento?: ObjetivosPlan | null
   nivel_actividad: OpcionCatalogo | null
   objetivos: ObjetivosPlan | null
   del_paciente: boolean
@@ -149,6 +154,8 @@ export interface ObjetivosPlanInput {
 
 export interface ParametrosPlanInput {
   id_objetivo?: number
+  /** Objetivo propio del plan; excluyente con `id_objetivo`. */
+  objetivo_personalizado?: string
   id_nivel_actividad?: number
   objetivos?: ObjetivosPlanInput
   guardar_como_prescripcion?: boolean
