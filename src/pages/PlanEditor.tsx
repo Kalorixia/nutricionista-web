@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BookmarkPlus,
   Copy,
+  FileDown,
   Loader2,
   NotebookPen,
   Pencil,
@@ -21,6 +22,7 @@ import { GenerationMetrics } from "@/components/modules/plans/GenerationMetrics"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
 import { PlanHeaderDialog } from "@/components/modules/plans/PlanHeaderDialog"
 import { TextEditDialog } from "@/components/modules/plans/TextEditDialog"
+import { PlanPdfDialog } from "@/components/modules/plans/PlanPdfDialog"
 import {
   CopyPlanDialog,
   type ModoCopia,
@@ -63,6 +65,7 @@ export default function PlanEditor() {
   const idPlan = Number(id)
   const navigate = useNavigate()
   const [copia, set_copia] = useState<ModoCopia | null>(null)
+  const [pdf_open, set_pdf_open] = useState(false)
 
   const [plan, setPlan] = useState<PlanificacionDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -416,6 +419,13 @@ export default function PlanEditor() {
         )}
         <Button
           variant="outline"
+          onClick={() => set_pdf_open(true)}
+          className="gap-1.5"
+        >
+          <FileDown className="h-4 w-4" /> PDF
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => set_copia("duplicar")}
           disabled={busy}
           className="gap-1.5"
@@ -457,6 +467,9 @@ export default function PlanEditor() {
         )}
       </div>
 
+      {pdf_open && (
+        <PlanPdfDialog plan={plan} onClose={() => set_pdf_open(false)} />
+      )}
       {copia && (
         <CopyPlanDialog
           modo={copia}
