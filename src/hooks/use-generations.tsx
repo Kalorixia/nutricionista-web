@@ -100,9 +100,14 @@ export function GenerationsProvider({
   }, [announce])
 
   useEffect(() => {
-    void refresh()
+    // La primera consulta sale en la próxima vuelta del event loop, no en el
+    // cuerpo del efecto: así el estado sólo se escribe desde callbacks.
+    const first = window.setTimeout(() => void refresh(), 0)
     const timer = window.setInterval(() => void refresh(), POLL_MS)
-    return () => window.clearInterval(timer)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(timer)
+    }
   }, [refresh])
 
   const track = useCallback((generacion: GeneracionPlan) => {

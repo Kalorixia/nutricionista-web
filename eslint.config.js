@@ -24,6 +24,7 @@ export default defineConfig([
       'src/components/common/ConfirmDialog.tsx',
       'src/components/ui/**/*.tsx',
       'src/hooks/use-auth.tsx',
+      'src/hooks/use-generations.tsx',
     ],
     rules: {
       'react-refresh/only-export-components': 'off',
