@@ -240,7 +240,13 @@ describe("Revisión del plan", () => {
       screen.getByPlaceholderText("Buscar recetas o alimentos…"),
       "arroz"
     )
-    const option = await screen.findByRole("button", { name: "Arroz" })
+    // La búsqueda espera el debounce (350 ms) y después la respuesta: con la
+    // máquina cargada, el segundo por defecto de findBy no alcanza.
+    const option = await screen.findByRole(
+      "button",
+      { name: "Arroz" },
+      { timeout: 4000 }
+    )
     await user.dblClick(option)
     expect(mealPlansService.addRecipe).toHaveBeenCalledTimes(1)
     finish({
