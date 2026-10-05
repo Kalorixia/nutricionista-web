@@ -148,6 +148,17 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* El tema oscuro va por clase: sin esto el navegador dibuja los controles
+     nativos (las opciones de un <select>, las barras de desplazamiento) en
+     claro o en gris, con el texto blanco del tema encima. */
+  .dark {
+    color-scheme: dark;
+  }
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
   body {
     @apply bg-background text-foreground antialiased;
     background-image: radial-gradient(

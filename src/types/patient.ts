@@ -49,14 +49,36 @@ export interface CalculoNutricional {
 }
 
 export interface CondicionPerfil {
+  /** Null cuando es una condición escrita a mano. */
+  id_condicion?: number | null
   nombre: string
   detalle: string | null
 }
 
 export interface RestriccionPerfil {
+  /** Null cuando es una restricción escrita a mano. */
+  id_restriccion?: number | null
   tipo: string | null
   nombre: string
   detalle: string | null
+}
+
+export type TipoRestriccion = "alergia" | "intolerancia" | "aversion"
+
+export interface OpcionRegistro {
+  id: number
+  nombre: string
+  codigo?: string
+  tipo?: string
+  descripcion?: string | null
+}
+
+/** GET /pacientes/catalogos/registro: las opciones del perfil clínico. */
+export interface CatalogosRegistro {
+  objetivos: OpcionRegistro[]
+  niveles_actividad: OpcionRegistro[]
+  condiciones_medicas: OpcionRegistro[]
+  restricciones_alimentarias: OpcionRegistro[]
 }
 
 export interface PerfilPaciente {
@@ -68,6 +90,10 @@ export interface PerfilPaciente {
   peso_kg: number | null
   altura_cm: number | null
   objetivo: { id: number; codigo: string; nombre: string } | null
+  /** Objetivo escrito por el paciente ("Otro"); excluyente con `objetivo`. */
+  objetivo_personalizado?: string | null
+  /** Gustos y hábitos opcionales (KAL-132-01); null si no respondió. */
+  preferencias?: PreferenciasPaciente | null
   nivel_actividad: { id: number; nombre: string } | null
   calculo_nutricional: CalculoNutricional | null
   condiciones_medicas: CondicionPerfil[]
@@ -75,13 +101,29 @@ export interface PerfilPaciente {
   onboarding_completado: boolean
 }
 
+/**
+ * Lo que el nutricionista puede corregir (KAL-131-07). Nombre y fecha de
+ * nacimiento no: el backend los rechaza con 422. Las listas reemplazan a las
+ * guardadas.
+ */
 export interface ActualizarPerfilInput {
   peso_kg?: number
   altura_cm?: number
-  fecha_nacimiento?: string
   sexo_biologico?: "femenino" | "masculino"
   id_objetivo?: number
+  objetivo_personalizado?: string
   id_nivel_actividad?: number
+  condiciones_medicas?: {
+    id_condicion?: number
+    nombre_personalizado?: string
+    detalle?: string
+  }[]
+  restricciones_alimentarias?: {
+    id_restriccion?: number
+    tipo_personalizado?: TipoRestriccion
+    nombre_personalizado?: string
+    detalle?: string
+  }[]
 }
 
 /** Todo opcional: lo que se manda pisa el cálculo, el objeto vacío lo borra. */
@@ -90,4 +132,19 @@ export interface PrescribirObjetivoInput {
   proteinas_g?: number
   grasas_g?: number
   carbohidratos_g?: number
+}
+
+export type TiempoCocina = "menos_15" | "15_30" | "30_60" | "mas_60"
+
+/** Preferencias del paciente. Orientan al Copiloto; no son restricciones. */
+export interface PreferenciasPaciente {
+  le_gustan?: string[]
+  prefiere_evitar?: string[]
+  tiempo_cocina_semana?: TiempoCocina | null
+  tiempo_cocina_fin_de_semana?: TiempoCocina | null
+  habilidad_cocina?: "basica" | "intermedia" | "avanzada" | null
+  comidas_fuera?: ("Desayuno" | "Almuerzo" | "Merienda" | "Cena")[]
+  presupuesto?: "ajustado" | "medio" | "holgado" | null
+  personas_hogar?: number | null
+  comentarios?: string | null
 }

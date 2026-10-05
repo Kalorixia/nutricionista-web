@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ClinicalProfileForm } from "@/components/modules/patients/ClinicalProfileForm"
 import { patientsService } from "@/services/patients.service"
 import type { PerfilPaciente } from "@/types/patient"
 
 /**
  * Perfil clínico del paciente, editable por el profesional.
  *
- * Hasta ahora estos datos sólo los podía tocar el paciente desde su app, así
- * que un peso mal cargado en el onboarding quedaba mal para siempre y el
- * nutricionista no tenía forma de corregirlo.
+ * El profesional corrige todo lo físico y clínico (sexo, peso, altura,
+ * actividad, objetivo, condiciones y restricciones) sin depender de que el
+ * paciente lo haga desde la app. Nombre y fecha de nacimiento no (KAL-131-07).
  *
  * Los objetivos se prescriben aparte: son una decisión clínica, no un dato
  * físico. Lo prescrito gana sobre el cálculo y sobrevive a que el paciente
@@ -30,14 +31,23 @@ export function ClinicalProfileCard({
 }) {
   const [editando, set_editando] = useState<"datos" | "objetivo" | null>(null)
   const [guardando, set_guardando] = useState(false)
-  const [peso, set_peso] = useState("")
-  const [altura, set_altura] = useState("")
   const [kcal, set_kcal] = useState("")
 
   const calculo = perfil.calculo_nutricional
   const prescritos = calculo?.prescrito_por_profesional ?? []
   const kcal_prescritas = prescritos.includes("get_objetivo_kcal")
   const sugerido = calculo?.calculado?.get_objetivo_kcal
+  // Un objetivo propio no tiene fórmula: el paciente queda sin energía
+  // objetivo hasta que el profesional la prescribe (KAL-131-06).
+  const objetivo_propio = perfil.objetivo_personalizado ?? null
+  const datos_completos =
+    perfil.peso_kg != null &&
+    perfil.altura_cm != null &&
+    perfil.fecha_nacimiento != null &&
+    perfil.sexo_biologico != null &&
+    perfil.nivel_actividad != null
+  const puede_prescribir =
+    calculo != null || (objetivo_propio != null && datos_completos)
 
   const guardar = async (accion: () => Promise<PerfilPaciente>) => {
     if (guardando) return
@@ -55,11 +65,7 @@ export function ClinicalProfileCard({
     }
   }
 
-  const abrir_datos = () => {
-    set_peso(perfil.peso_kg != null ? String(perfil.peso_kg) : "")
-    set_altura(perfil.altura_cm != null ? String(perfil.altura_cm) : "")
-    set_editando("datos")
-  }
+  const abrir_datos = () => set_editando("datos")
 
   const abrir_objetivo = () => {
     set_kcal(
@@ -75,72 +81,49 @@ export function ClinicalProfileCard({
       <div className="flex items-start justify-between gap-3">
         <h2 className="font-heading text-lg font-semibold">Perfil clínico</h2>
         {editando === null && (
-          <Button size="sm" variant="ghost" onClick={abrir_datos} className="gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={abrir_datos}
+            className="gap-1.5"
+          >
             <Pencil className="h-3.5 w-3.5" /> Editar datos
           </Button>
         )}
       </div>
 
       {editando === "datos" ? (
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const cambios: Record<string, number> = {}
-            if (peso.trim()) cambios.peso_kg = Number(peso)
-            if (altura.trim()) cambios.altura_cm = Number(altura)
+        <ClinicalProfileForm
+          perfil={perfil}
+          guardando={guardando}
+          onGuardar={(cambios) =>
             void guardar(() =>
               patientsService.actualizarPerfil(perfil.id_paciente, cambios)
             )
-          }}
-        >
-          <div>
-            <Label htmlFor="perfil-peso">Peso (kg)</Label>
-            <Input
-              id="perfil-peso"
-              type="number"
-              step="0.1"
-              min="1"
-              max="500"
-              value={peso}
-              disabled={guardando}
-              onChange={(event) => set_peso(event.target.value)}
-              className="w-28"
-            />
-          </div>
-          <div>
-            <Label htmlFor="perfil-altura">Altura (cm)</Label>
-            <Input
-              id="perfil-altura"
-              type="number"
-              step="0.1"
-              min="30"
-              max="300"
-              value={altura}
-              disabled={guardando}
-              onChange={(event) => set_altura(event.target.value)}
-              className="w-28"
-            />
-          </div>
-          <Button type="submit" size="sm" disabled={guardando} className="gap-1.5">
-            {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Guardar
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={guardando}
-            onClick={() => set_editando(null)}
-          >
-            Cancelar
-          </Button>
-        </form>
+          }
+          onCancelar={() => set_editando(null)}
+        />
       ) : (
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-          <Dato etiqueta="Peso" valor={perfil.peso_kg != null ? `${perfil.peso_kg} kg` : null} />
-          <Dato etiqueta="Altura" valor={perfil.altura_cm != null ? `${perfil.altura_cm} cm` : null} />
-          <Dato etiqueta="Objetivo" valor={perfil.objetivo?.nombre ?? null} />
-          <Dato etiqueta="Actividad" valor={perfil.nivel_actividad?.nombre ?? null} />
+          <Dato
+            etiqueta="Peso"
+            valor={perfil.peso_kg != null ? `${perfil.peso_kg} kg` : null}
+          />
+          <Dato
+            etiqueta="Altura"
+            valor={perfil.altura_cm != null ? `${perfil.altura_cm} cm` : null}
+          />
+          <Dato
+            etiqueta="Objetivo"
+            valor={
+              perfil.objetivo?.nombre ??
+              (objetivo_propio ? `Otro: ${objetivo_propio}` : null)
+            }
+          />
+          <Dato
+            etiqueta="Actividad"
+            valor={perfil.nivel_actividad?.nombre ?? null}
+          />
         </dl>
       )}
 
@@ -158,16 +141,23 @@ export function ClinicalProfileCard({
               </p>
             )}
           </div>
-          {editando === null && calculo && (
-            <Button size="sm" variant="ghost" onClick={abrir_objetivo} className="gap-1.5">
+          {editando === null && puede_prescribir && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={abrir_objetivo}
+              className="gap-1.5"
+            >
               <Pencil className="h-3.5 w-3.5" /> Prescribir
             </Button>
           )}
         </div>
 
-        {!calculo && (
+        {!calculo && editando !== "objetivo" && (
           <p className="mt-2 text-sm text-muted-foreground">
-            Faltan datos físicos del paciente para calcular sus objetivos.
+            {objetivo_propio && datos_completos
+              ? "El paciente eligió un objetivo propio, que no tiene fórmula. Prescribí la energía para calcular sus macros; mientras tanto, el Copiloto genera sin objetivo energético."
+              : "Faltan datos físicos del paciente para calcular sus objetivos."}
           </p>
         )}
 
@@ -201,8 +191,14 @@ export function ClinicalProfileCard({
                 {sugerido != null && ` (${Math.round(sugerido)} kcal)`}.
               </p>
             </div>
-            <Button type="submit" size="sm" disabled={guardando} className="gap-1.5">
-              {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Guardar
+            <Button
+              type="submit"
+              size="sm"
+              disabled={guardando}
+              className="gap-1.5"
+            >
+              {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{" "}
+              Guardar
             </Button>
             <Button
               type="button"
@@ -222,11 +218,27 @@ export function ClinicalProfileCard({
               etiqueta="Energía"
               valor={`${Math.round(calculo.get_objetivo_kcal)} kcal`}
               prescrito={kcal_prescritas}
-              sugerido={kcal_prescritas && sugerido != null ? `${Math.round(sugerido)} kcal` : null}
+              sugerido={
+                kcal_prescritas && sugerido != null
+                  ? `${Math.round(sugerido)} kcal`
+                  : null
+              }
             />
-            <Dato etiqueta="Proteínas" valor={`${Math.round(calculo.proteinas_g)} g`} prescrito={prescritos.includes("proteinas_g")} />
-            <Dato etiqueta="Carbohidratos" valor={`${Math.round(calculo.carbohidratos_g)} g`} prescrito={prescritos.includes("carbohidratos_g")} />
-            <Dato etiqueta="Grasas" valor={`${Math.round(calculo.grasas_g)} g`} prescrito={prescritos.includes("grasas_g")} />
+            <Dato
+              etiqueta="Proteínas"
+              valor={`${Math.round(calculo.proteinas_g)} g`}
+              prescrito={prescritos.includes("proteinas_g")}
+            />
+            <Dato
+              etiqueta="Carbohidratos"
+              valor={`${Math.round(calculo.carbohidratos_g)} g`}
+              prescrito={prescritos.includes("carbohidratos_g")}
+            />
+            <Dato
+              etiqueta="Grasas"
+              valor={`${Math.round(calculo.grasas_g)} g`}
+              prescrito={prescritos.includes("grasas_g")}
+            />
           </dl>
         )}
       </div>

@@ -1,3 +1,6 @@
+/** `alimento` = se come sin preparar: una porción, sin pasos (KAL-131-02). */
+export type TipoReceta = "receta" | "alimento"
+
 export interface RecetaListItem {
   id_receta: number
   nombre: string
@@ -11,6 +14,8 @@ export interface RecetaListItem {
   publica: boolean
   created_at: string
   updated_at: string | null
+  tipo?: TipoReceta
+  porcion_descripcion?: string | null
   categorias: string[]
 }
 

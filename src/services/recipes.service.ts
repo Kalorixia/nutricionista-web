@@ -4,6 +4,7 @@ import type {
   ListaRecetasResponse,
   RecetaDetalle,
   RecetaListItem,
+  TipoReceta,
 } from "@/types/recipe"
 
 interface ListaCategoriasResponse {
@@ -17,10 +18,16 @@ export const recipesService = {
    * listados navegables deben pasar `limit`/`offset`.
    */
   async list(
-    params: { q?: string; limit?: number; offset?: number } = {}
+    params: {
+      q?: string
+      limit?: number
+      offset?: number
+      tipo?: TipoReceta
+    } = {}
   ): Promise<ListaRecetasResponse> {
     const search = new URLSearchParams()
     if (params.q) search.set("q", params.q)
+    if (params.tipo) search.set("tipo", params.tipo)
     if (params.limit) search.set("limit", String(params.limit))
     if (params.offset) search.set("offset", String(params.offset))
     const qs = search.toString() ? `?${search.toString()}` : ""
@@ -32,8 +39,9 @@ export const recipesService = {
   },
 
   async listCategorias(): Promise<Categoria[]> {
-    const { categorias } =
-      await authedFetch<ListaCategoriasResponse>("/recetas/categorias")
+    const { categorias } = await authedFetch<ListaCategoriasResponse>(
+      "/recetas/categorias"
+    )
     return categorias
   },
 

@@ -19,7 +19,15 @@ export function UnverifiedNotice({
 }) {
   const pendientes = generacion?.sin_verificar ?? []
   const advertencias = generacion?.advertencias ?? []
-  if (!pendientes.length && !advertencias.length) return null
+  const medidas = generacion?.advertencias_sistema ?? []
+  const descartes = generacion?.descartes_restricciones ?? []
+  if (
+    !pendientes.length &&
+    !advertencias.length &&
+    !medidas.length &&
+    !descartes.length
+  )
+    return null
 
   return (
     <Card
@@ -33,15 +41,68 @@ export function UnverifiedNotice({
           className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500"
         />
         <div className="space-y-1">
-          <h2 className="font-medium leading-none">
+          <h2 className="leading-none font-medium">
             Revisá esto antes de aprobar
           </h2>
           <p className="text-sm text-muted-foreground">
-            El sistema no pudo comprobar estos puntos con los datos del
-            catálogo.
+            Lo que el sistema midió sobre el borrador y lo que no pudo comprobar
+            con los datos del catálogo.
           </p>
         </div>
       </div>
+
+      {medidas.length > 0 && (
+        <div className="space-y-1.5 pl-8">
+          <p className="text-sm font-medium">
+            Ajuste del borrador{" "}
+            <span className="font-normal text-muted-foreground">
+              (calculado por el sistema)
+            </span>
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {medidas.map((item) => (
+              <li key={item} className="list-disc">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {descartes.length > 0 && (
+        <div className="space-y-1.5 pl-8">
+          <p className="text-sm font-medium">
+            Descartado por restricciones{" "}
+            <span className="font-normal text-muted-foreground">
+              (revisión automática, sin certificar)
+            </span>
+          </p>
+          <div className="space-y-1">
+            {descartes.map((grupo) => (
+              <details key={grupo.restriccion} className="text-sm">
+                <summary className="cursor-pointer">
+                  <span className="font-medium">{grupo.restriccion}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {grupo.ingredientes.length}{" "}
+                    {grupo.ingredientes.length === 1
+                      ? "ingrediente"
+                      : "ingredientes"}{" "}
+                    · {grupo.items_descartados}{" "}
+                    {grupo.items_descartados === 1
+                      ? "ítem descartado"
+                      : "ítems descartados"}
+                  </span>
+                </summary>
+                <div className="mt-1 space-y-1 pl-4 text-muted-foreground">
+                  {grupo.motivo && <p>{grupo.motivo}</p>}
+                  <p>{grupo.ingredientes.join(", ")}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
 
       {pendientes.length > 0 && (
         <ul className="space-y-1.5 pl-8 text-sm">

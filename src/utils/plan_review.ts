@@ -38,6 +38,7 @@ export function review_summary(plan: PlanificacionDetalle) {
     missing,
     outside,
     unverified,
-    description: `${plan.nombre} para ${plan.nombre_paciente}. ${plan.recetas.length} comidas, ${assigned.size} de 28 momentos cubiertos.`,
+    // Una comida puede tener varios ítems (KAL-131-03): se cuentan aparte.
+    description: `${plan.nombre} para ${plan.nombre_paciente}. ${plan.recetas.length} ${plan.recetas.length === 1 ? "ítem" : "ítems"} en ${assigned.size} ${assigned.size === 1 ? "comida" : "comidas"} de la semana.`,
   }
 }

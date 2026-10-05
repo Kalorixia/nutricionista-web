@@ -26,6 +26,16 @@ function detailMessage(detail: unknown): string | null {
       : null
   )
   if (fields.includes("email")) return "El email ingresado no es válido"
+  // Los validadores propios del backend escriben su mensaje en español; Pydantic
+  // sólo le antepone "Value error, ". Ese sí se puede mostrar tal cual.
+  const own = detail.find(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      typeof item.msg === "string" &&
+      item.msg.startsWith("Value error, ")
+  )
+  if (own) return own.msg.slice("Value error, ".length)
   return "Revisá los datos ingresados"
 }
 

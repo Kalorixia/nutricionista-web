@@ -1,27 +1,45 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { Archive, Loader2, Plus, Send, Sparkles } from "lucide-react"
+import {
+  Archive,
+  BookmarkPlus,
+  Copy,
+  FileText,
+  Loader2,
+  Plus,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import { useConfirm } from "@/components/common/ConfirmDialog"
+import { cn } from "@/lib/utils"
+import { formatDate } from "@/utils/format"
+import { SELECT_CLASS } from "@/utils/form_styles"
+import {
+  agrupar_por_paciente,
+  iniciales,
+  type GrupoPaciente,
+} from "@/utils/planes"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { useGenerations } from "@/hooks/use-generations"
 import { patientsService } from "@/services/patients.service"
-import { MOMENTOS_COMIDA } from "@/types/mealPlan"
-import type { EstadoPlanificacion, Planificacion } from "@/types/mealPlan"
+import {
+  NewPlanDialog,
+  type NuevoPlan,
+} from "@/components/modules/plans/NewPlanDialog"
+import {
+  CopyPlanDialog,
+  type ModoCopia,
+} from "@/components/modules/plans/CopyPlanDialog"
+import type {
+  EstadoPlanificacion,
+  Planificacion,
+  PlantillaResumen,
+} from "@/types/mealPlan"
 import type { PacienteVinculado } from "@/types/patient"
 
 const ESTADO_LABEL: Record<EstadoPlanificacion, string> = {
@@ -39,6 +57,37 @@ const ESTADO_VARIANT: Record<
   archivada: "outline",
 }
 
+/** Con todos los pacientes a la vista, cuántos planes se muestran de cada uno. */
+const PLANES_POR_GRUPO = 3
+
+const clave_grupo = (grupo: GrupoPaciente) =>
+  String(grupo.id_paciente ?? grupo.nombre_paciente)
+
+function resumen_grupo(planes: Planificacion[]): string {
+  const cuenta = (estado: EstadoPlanificacion) =>
+    planes.filter((plan) => plan.estado === estado).length
+  return [
+    `${planes.length} ${planes.length === 1 ? "plan" : "planes"}`,
+    cuenta("borrador") &&
+      `${cuenta("borrador")} ${cuenta("borrador") === 1 ? "borrador" : "borradores"}`,
+    cuenta("publicada") &&
+      `${cuenta("publicada")} ${cuenta("publicada") === 1 ? "publicado" : "publicados"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+function Avatar({ nombre }: { nombre: string }) {
+  return (
+    <span
+      aria-hidden
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+    >
+      {iniciales(nombre)}
+    </span>
+  )
+}
+
 export default function Planning() {
   const navigate = useNavigate()
   const confirm = useConfirm()
@@ -50,23 +99,30 @@ export default function Planning() {
 
   const [creating, setCreating] = useState(false)
   const [idPaciente, setIdPaciente] = useState("")
-  const [nombre, setNombre] = useState("")
-  const [descripcion, setDescripcion] = useState("")
   const [saving, setSaving] = useState(false)
-  const [instructions, set_instructions] = useState("")
-  const [momentos, set_momentos] = useState<string[]>([...MOMENTOS_COMIDA])
-  const { track } = useGenerations()
+  const { active, recent, track, dismiss } = useGenerations()
   const [load_error, set_load_error] = useState<string | null>(null)
   const [patients_error, set_patients_error] = useState<string | null>(null)
   const [busy_id, set_busy_id] = useState<number | null>(null)
   const action_lock = useRef(false)
   const create_lock = useRef(false)
+  const [plantillas, set_plantillas] = useState<PlantillaResumen[]>([])
+  const [copia, set_copia] = useState<{
+    modo: ModoCopia
+    origen: { id_planificacion: number; nombre: string; es_plantilla?: boolean }
+    id_paciente?: number | null
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
     set_load_error(null)
     try {
-      setPlans(await mealPlansService.list())
+      const [lista, propias] = await Promise.all([
+        mealPlansService.list(),
+        mealPlansService.templates(),
+      ])
+      setPlans(lista)
+      set_plantillas(propias)
     } catch (error) {
       set_load_error(
         error instanceof Error ? error.message : "No pudimos cargar los planes"
@@ -95,6 +151,37 @@ export default function Planning() {
     })()
   }, [])
 
+  const completadas = recent
+    .filter((item) => item.estado === "completada" && item.id_planificacion)
+    .map((item) => item.id_planificacion as number)
+  const nuevos = new Set(completadas)
+  const clave_completadas = completadas.join(",")
+  useEffect(() => {
+    if (!clave_completadas) return
+    void (async () => {
+      try {
+        const lista = await mealPlansService.list()
+        setPlans(lista)
+      } catch {
+        // Si falla, el borrador igual aparece en la próxima carga.
+      }
+    })()
+  }, [clave_completadas])
+  const fallidas = recent.filter((item) => item.estado === "fallida")
+
+  // Planes agrupados por paciente, con filtro en la URL (?de=<paciente>) para
+  // que sobreviva a abrir un plan y volver.
+  const grupos = agrupar_por_paciente(plans)
+  const filtro = searchParams.get("de") ?? ""
+  const grupo_filtrado =
+    grupos.find((grupo) => clave_grupo(grupo) === filtro) ?? null
+  const filtrar = (valor: string) =>
+    setSearchParams(valor ? { de: valor } : {}, { replace: true })
+  const nombre_paciente = (idPaciente: number) => {
+    const paciente = pacientes.find((item) => item.id_paciente === idPaciente)
+    return paciente ? `${paciente.nombre} ${paciente.apellido}` : "Paciente"
+  }
+
   // Entrada desde PatientDetail.tsx: "Crear plan para este paciente".
   useEffect(() => {
     void (async () => {
@@ -108,35 +195,24 @@ export default function Planning() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleCreate = async (with_ai = false) => {
+  const handleCreate = async (nuevo: NuevoPlan, with_ai: boolean) => {
     if (create_lock.current) return
-    if (!idPaciente) {
-      toast.error("Elegí un paciente")
-      return
-    }
-    if (!nombre.trim()) {
-      toast.error("Ingresá un nombre para el plan")
-      return
-    }
-    if (with_ai && !momentos.length) {
-      toast.error("Elegí al menos una comida para el plan")
-      return
-    }
     setSaving(true)
     create_lock.current = true
     try {
       const input = {
-        id_paciente: Number(idPaciente),
-        nombre: nombre.trim(),
-        descripcion: descripcion.trim() || undefined,
+        id_paciente: nuevo.id_paciente,
+        nombre: nuevo.nombre,
+        descripcion: nuevo.descripcion,
+        ...nuevo.targets,
       }
       // Con IA el pedido es asíncrono: se cierra el diálogo y el profesional
       // sigue trabajando. El aviso llega cuando el borrador está listo.
       if (with_ai) {
         const generacion = await mealPlansService.generate({
           ...input,
-          indicaciones: instructions.trim() || undefined,
-          momentos,
+          indicaciones: nuevo.indicaciones,
+          momentos: nuevo.momentos,
         })
         track(generacion)
         toast.success("Lo estoy generando. Te aviso cuando esté listo.")
@@ -145,10 +221,6 @@ export default function Planning() {
       if (plan) toast.success("Plan creado")
       setCreating(false)
       setIdPaciente("")
-      setNombre("")
-      setDescripcion("")
-      set_instructions("")
-      set_momentos([...MOMENTOS_COMIDA])
       if (plan) navigate(`/planificacion/${plan.id_planificacion}`)
       else await load()
     } catch (error) {
@@ -175,6 +247,32 @@ export default function Planning() {
         current.filter((p) => p.id_planificacion !== plan.id_planificacion)
       )
       toast.success("Plan eliminado")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    } finally {
+      action_lock.current = false
+      set_busy_id(null)
+    }
+  }
+
+  const handle_delete_template = async (plantilla: PlantillaResumen) => {
+    if (action_lock.current) return
+    action_lock.current = true
+    set_busy_id(plantilla.id_planificacion)
+    try {
+      const ok = await confirm({
+        title: "¿Eliminar esta plantilla?",
+        description: `"${plantilla.nombre}" se va a eliminar. Los planes creados desde ella no cambian.`,
+        confirmText: "Eliminar",
+      })
+      if (!ok) return
+      await mealPlansService.remove(plantilla.id_planificacion)
+      set_plantillas((actuales) =>
+        actuales.filter(
+          (item) => item.id_planificacion !== plantilla.id_planificacion
+        )
+      )
+      toast.success("Plantilla eliminada")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Ocurrió un error")
     } finally {
@@ -215,6 +313,72 @@ export default function Planning() {
         </Button>
       </div>
 
+      {(active.length > 0 || fallidas.length > 0) && (
+        <section className="space-y-2" aria-label="En preparación">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <Loader2
+              className={cn("h-4 w-4", active.length > 0 && "animate-spin")}
+            />
+            En preparación
+          </h2>
+          <Card className="divide-y divide-border overflow-hidden">
+            {active.map((generacion) => (
+              <div
+                key={`g-${generacion.id_generacion}`}
+                role="status"
+                aria-label={`Generando ${generacion.nombre || "borrador"}`}
+                className="flex flex-wrap items-center gap-3 bg-primary/5 p-4"
+              >
+                <Avatar nombre={nombre_paciente(generacion.id_paciente)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {nombre_paciente(generacion.id_paciente)}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {generacion.nombre || "Borrador del Copiloto"} ·{" "}
+                    {generacion.estado === "pendiente"
+                      ? "En cola"
+                      : "El Copiloto está armando la semana"}{" "}
+                    · <Transcurrido desde={generacion.created_at} />
+                  </p>
+                </div>
+                <Badge variant="secondary" className="gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {generacion.estado === "pendiente" ? "En cola" : "Generando"}
+                </Badge>
+              </div>
+            ))}
+            {fallidas.map((generacion) => (
+              <div
+                key={`f-${generacion.id_generacion}`}
+                className="flex flex-wrap items-center gap-3 bg-destructive/5 p-4"
+              >
+                <Avatar nombre={nombre_paciente(generacion.id_paciente)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {nombre_paciente(generacion.id_paciente)}
+                  </p>
+                  <p className="text-xs text-destructive">
+                    {generacion.nombre || "Borrador del Copiloto"} ·{" "}
+                    {generacion.error_mensaje || "No se pudo generar."}
+                  </p>
+                </div>
+                <Badge variant="destructive">Falló</Badge>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => dismiss(generacion.id_generacion)}
+                  className="gap-1"
+                  aria-label={`Descartar ${generacion.nombre || "borrador"}`}
+                >
+                  <X className="h-4 w-4" /> Descartar
+                </Button>
+              </div>
+            ))}
+          </Card>
+        </section>
+      )}
+
       {loading ? (
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       ) : load_error ? (
@@ -222,206 +386,326 @@ export default function Planning() {
           <p role="alert">{load_error}</p>
           <Button onClick={load}>Reintentar</Button>
         </Card>
+      ) : plans.length === 0 ? (
+        active.length === 0 &&
+        fallidas.length === 0 && (
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            Todavía no creaste ningún plan.
+          </Card>
+        )
       ) : (
-        <Card className="surface-raised divide-y divide-border overflow-hidden">
-          {plans.map((plan) => (
-            <div
-              key={plan.id_planificacion}
-              className="flex flex-wrap items-center gap-3 p-4 transition-colors hover:bg-secondary/30"
-            >
-              <div className="min-w-0 flex-1">
-                <Link
-                  to={`/planificacion/${plan.id_planificacion}`}
-                  className="truncate font-medium hover:underline"
-                >
-                  {plan.nombre}
-                </Link>
-                <p className="truncate text-xs text-muted-foreground">
-                  {plan.nombre_paciente} · {plan.cantidad_recetas} recetas
-                </p>
-              </div>
-              <Badge variant={ESTADO_VARIANT[plan.estado]}>
-                {ESTADO_LABEL[plan.estado]}
-              </Badge>
-              {plan.estado === "borrador" && (
+        <section className="space-y-3" aria-label="Planes por paciente">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="text-brand-dark font-heading text-xl font-semibold">
+              Planes
+            </h2>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="filtro-paciente"
+                className="text-sm text-muted-foreground"
+              >
+                Paciente
+              </label>
+              <select
+                id="filtro-paciente"
+                value={grupo_filtrado ? filtro : ""}
+                onChange={(event) => filtrar(event.target.value)}
+                className={cn(SELECT_CLASS, "w-56")}
+              >
+                <option value="">Todos ({grupos.length})</option>
+                {[...grupos]
+                  .sort((a, b) =>
+                    a.nombre_paciente.localeCompare(b.nombre_paciente)
+                  )
+                  .map((grupo) => (
+                    <option key={clave_grupo(grupo)} value={clave_grupo(grupo)}>
+                      {grupo.nombre_paciente} ({grupo.planes.length})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
+          {(grupo_filtrado ? [grupo_filtrado] : grupos).map((grupo) => {
+            const visibles = grupo_filtrado
+              ? grupo.planes
+              : grupo.planes.slice(0, PLANES_POR_GRUPO)
+            return (
+              <Card
+                key={clave_grupo(grupo)}
+                className="overflow-hidden"
+                role="group"
+                aria-label={`Planes de ${grupo.nombre_paciente}`}
+              >
+                <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/30 px-4 py-3">
+                  <Avatar nombre={grupo.nombre_paciente} />
+                  <div className="min-w-0 flex-1">
+                    {grupo.id_paciente ? (
+                      <Link
+                        to={`/pacientes/${grupo.id_paciente}`}
+                        className="font-semibold hover:underline"
+                      >
+                        {grupo.nombre_paciente}
+                      </Link>
+                    ) : (
+                      <p className="font-semibold">{grupo.nombre_paciente}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {resumen_grupo(grupo.planes)}
+                    </p>
+                  </div>
+                  {grupo.id_paciente && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() => {
+                        setIdPaciente(String(grupo.id_paciente))
+                        setCreating(true)
+                      }}
+                      aria-label={`Nuevo plan para ${grupo.nombre_paciente}`}
+                    >
+                      <Plus className="h-4 w-4" /> Plan
+                    </Button>
+                  )}
+                </div>
+                <div className="divide-y divide-border">
+                  {visibles.map((plan) => (
+                    <div
+                      key={plan.id_planificacion}
+                      className="flex flex-wrap items-center gap-2 px-4 py-3 transition-colors hover:bg-secondary/30"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          to={`/planificacion/${plan.id_planificacion}`}
+                          className="truncate font-medium hover:underline"
+                        >
+                          {plan.nombre}
+                        </Link>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {plan.cantidad_recetas} ítems
+                          {plan.fecha_publicacion
+                            ? ` · publicado el ${formatDate(plan.fecha_publicacion)}`
+                            : plan.created_at
+                              ? ` · creado el ${formatDate(plan.created_at)}`
+                              : ""}
+                        </p>
+                      </div>
+                      {nuevos.has(plan.id_planificacion) && (
+                        <Badge
+                          variant="outline"
+                          className="border-primary text-primary"
+                        >
+                          Nuevo
+                        </Badge>
+                      )}
+                      <Badge variant={ESTADO_VARIANT[plan.estado]}>
+                        {ESTADO_LABEL[plan.estado]}
+                      </Badge>
+                      {plan.estado === "borrador" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          render={
+                            <Link
+                              to={`/planificacion/${plan.id_planificacion}`}
+                            />
+                          }
+                          className="gap-1 rounded-xl"
+                        >
+                          <Send className="h-4 w-4" /> Revisar y publicar
+                        </Button>
+                      )}
+                      {plan.estado === "publicada" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleArchive(plan)}
+                          disabled={busy_id !== null}
+                          className="gap-1 rounded-xl"
+                        >
+                          <Archive className="h-4 w-4" /> Archivar
+                        </Button>
+                      )}
+                      <div className="flex items-center">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() =>
+                            set_copia({
+                              modo: "duplicar",
+                              origen: plan,
+                              id_paciente: plan.id_paciente,
+                            })
+                          }
+                          disabled={busy_id !== null}
+                          aria-label={`Duplicar ${plan.nombre}`}
+                          title="Duplicar"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() =>
+                            set_copia({ modo: "plantilla", origen: plan })
+                          }
+                          disabled={busy_id !== null}
+                          aria-label={`Guardar ${plan.nombre} como plantilla`}
+                          title="Guardar como plantilla"
+                        >
+                          <BookmarkPlus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(plan)}
+                          disabled={busy_id !== null}
+                          aria-label={`Eliminar ${plan.nombre}`}
+                          title="Eliminar"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {grupo.planes.length > visibles.length && (
+                  <button
+                    type="button"
+                    onClick={() => filtrar(clave_grupo(grupo))}
+                    className="w-full border-t border-border px-4 py-2 text-left text-sm text-primary hover:bg-secondary/30"
+                  >
+                    Ver los {grupo.planes.length} planes de{" "}
+                    {grupo.nombre_paciente}
+                  </button>
+                )}
+              </Card>
+            )
+          })}
+        </section>
+      )}
+
+      {!loading && !load_error && (
+        <section className="space-y-3" aria-label="Mis plantillas">
+          <div>
+            <h2 className="text-brand-dark font-heading text-xl font-semibold">
+              Mis plantillas
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Planes base privados para reusar. Guardá cualquier plan como
+              plantilla y creá desde ella un borrador para un paciente.
+            </p>
+          </div>
+          <Card className="divide-y divide-border overflow-hidden">
+            {plantillas.map((plantilla) => (
+              <div
+                key={plantilla.id_planificacion}
+                className="flex flex-wrap items-center gap-3 p-4"
+              >
+                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to={`/planificacion/${plantilla.id_planificacion}`}
+                    className="truncate font-medium hover:underline"
+                  >
+                    {plantilla.nombre}
+                  </Link>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {plantilla.cantidad_recetas} ítems
+                    {plantilla.descripcion ? ` · ${plantilla.descripcion}` : ""}
+                  </p>
+                </div>
                 <Button
                   size="sm"
                   variant="outline"
-                  render={
-                    <Link to={`/planificacion/${plan.id_planificacion}`} />
+                  onClick={() =>
+                    set_copia({
+                      modo: "duplicar",
+                      origen: { ...plantilla, es_plantilla: true },
+                    })
                   }
-                  className="gap-1 rounded-xl"
-                >
-                  <Send className="h-4 w-4" /> Revisar y publicar
-                </Button>
-              )}
-              {plan.estado === "publicada" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleArchive(plan)}
                   disabled={busy_id !== null}
                   className="gap-1 rounded-xl"
                 >
-                  <Archive className="h-4 w-4" /> Archivar
+                  <Plus className="h-4 w-4" /> Crear plan
                 </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDelete(plan)}
-                disabled={busy_id !== null}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                Eliminar
-              </Button>
-            </div>
-          ))}
-          {plans.length === 0 && (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              Todavía no creaste ningún plan.
-            </p>
-          )}
-        </Card>
-      )}
-
-      <Dialog
-        open={creating}
-        onOpenChange={(open) => !saving && setCreating(open)}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nuevo plan de alimentación</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="plan-patient">Paciente</Label>
-              <select
-                id="plan-patient"
-                disabled={saving}
-                value={idPaciente}
-                onChange={(e) => setIdPaciente(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background p-2 text-sm"
-              >
-                <option value="">Seleccioná un paciente</option>
-                {pacientes.map((p) => (
-                  <option key={p.id_paciente} value={p.id_paciente}>
-                    {p.nombre} {p.apellido}
-                  </option>
-                ))}
-              </select>
-              {patients_error && (
-                <div role="alert">
-                  <p>{patients_error}</p>
-                  <Button onClick={load_patients} disabled={saving}>
-                    Reintentar pacientes
-                  </Button>
-                </div>
-              )}
-              {pacientes.length === 0 && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Todavía no tenés pacientes vinculados.
-                </p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="plan-name">Nombre del plan</Label>
-              <Input
-                id="plan-name"
-                disabled={saving}
-                maxLength={150}
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Descripción (opcional)</Label>
-              <Textarea
-                disabled={saving}
-                maxLength={2000}
-                value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)}
-                placeholder="Ej: Bajar de peso, primera consulta"
-                className="min-h-[70px]"
-              />
-            </div>
-            <div>
-              <Label>Comidas del plan</Label>
-              <p className="mb-2 text-xs text-muted-foreground">
-                No todos los pacientes hacen las cuatro. El Copiloto va a cubrir
-                los siete días de las que elijas.
-              </p>
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {MOMENTOS_COMIDA.map((momento) => (
-                  <label
-                    key={momento}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Checkbox
-                      id={`momento-${momento}`}
-                      disabled={saving}
-                      checked={momentos.includes(momento)}
-                      onCheckedChange={(marcado) =>
-                        set_momentos((actuales) =>
-                          marcado
-                            ? [...actuales, momento]
-                            : actuales.filter((valor) => valor !== momento)
-                        )
-                      }
-                    />
-                    {momento}
-                  </label>
-                ))}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handle_delete_template(plantilla)}
+                  disabled={busy_id !== null}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Eliminar plantilla ${plantilla.nombre}`}
+                >
+                  Eliminar
+                </Button>
               </div>
-              {momentos.length === 0 && (
-                <p role="alert" className="mt-1 text-xs text-destructive">
-                  Elegí al menos una comida.
-                </p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="copilot-instructions">
-                Indicaciones para el Copiloto (opcional)
-              </Label>
-              <Textarea
-                id="copilot-instructions"
-                disabled={saving}
-                maxLength={4000}
-                value={instructions}
-                onChange={(event) => set_instructions(event.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                El Copiloto crea un borrador privado para tu revisión.
-              </p>
-            </div>
-            {saving && (
-              <p role="status">
-                Preparando el borrador. La generación puede tardar hasta dos
-                minutos.
+            ))}
+            {plantillas.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                Todavía no guardaste plantillas.
               </p>
             )}
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={saving}
-              variant="outline"
-              onClick={() => setCreating(false)}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => handleCreate(false)} disabled={saving}>
-              Crear manual
-            </Button>
-            <Button
-              onClick={() => handleCreate(true)}
-              disabled={saving}
-              className="gap-1"
-            >
-              <Sparkles className="h-4 w-4" /> Generar con Copiloto
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </Card>
+        </section>
+      )}
+
+      {copia && (
+        <CopyPlanDialog
+          modo={copia.modo}
+          origen={copia.origen}
+          pacientes={pacientes}
+          idPacienteInicial={copia.id_paciente}
+          onClose={() => set_copia(null)}
+          onDone={(resultado) => {
+            set_copia(null)
+            toast.success(
+              resultado.plan.es_plantilla
+                ? "Plantilla guardada"
+                : "Borrador creado"
+            )
+            navigate(`/planificacion/${resultado.plan.id_planificacion}`)
+          }}
+        />
+      )}
+
+      {creating && (
+        <NewPlanDialog
+          pacientes={pacientes}
+          pacientesError={patients_error}
+          onRetryPacientes={load_patients}
+          idPacienteInicial={idPaciente}
+          saving={saving}
+          onClose={() => {
+            setCreating(false)
+            setIdPaciente("")
+          }}
+          onSubmit={(nuevo, con_copiloto) =>
+            void handleCreate(nuevo, con_copiloto)
+          }
+        />
+      )}
     </div>
+  )
+}
+
+/** Tiempo desde que se pidió el borrador, para que se note que avanza. */
+function Transcurrido({ desde }: { desde: string }) {
+  const [ahora, set_ahora] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => set_ahora(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const segundos = Math.max(
+    0,
+    Math.floor((ahora - new Date(desde).getTime()) / 1000)
+  )
+  const minutos = Math.floor(segundos / 60)
+  return (
+    <span className="tabular-nums">
+      {minutos}:{String(segundos % 60).padStart(2, "0")}
+    </span>
   )
 }

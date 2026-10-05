@@ -37,7 +37,10 @@ export interface PlanificacionRecetaItem {
 
 export interface PlanificacionDetalle {
   id_planificacion: number
-  id_paciente: number
+  /** Null en una plantilla (KAL-132-03). */
+  id_paciente: number | null
+  /** Plantilla propia: sin paciente, siempre borrador, nunca se publica. */
+  es_plantilla?: boolean
   nombre_paciente: string
   nombre: string
   descripcion: string | null
@@ -53,14 +56,109 @@ export interface PlanificacionDetalle {
     totales: NutritionTotals | null
     diferencia_objetivo: NutritionTotals | null
   }[]
-  objetivos_nutricionales?: {
-    get_objetivo_kcal: number
-    proteinas_g: number
-    grasas_g: number
-    carbohidratos_g: number
-    hidratacion_ml: number
-  } | null
+  objetivos_nutricionales?: ObjetivosPlan | null
+  objetivo_personalizado?: string | null
   generacion_ia?: GeneracionIA | null
+  /** Última modificación después de publicar (KAL-131-08). Sólo para el profesional. */
+  ultima_edicion?: {
+    fecha: string
+    usuario: string
+    accion: "agregar_item" | "quitar_item" | "editar_cabecera"
+  } | null
+  ediciones?: number
+  /** Lo que el profesional le escribe al paciente (KAL-132-02). */
+  indicaciones_generales?: string | null
+  /** Notas por comida, con clave "Día|Momento". */
+  notas_comidas?: Record<string, string>
+}
+
+/** Una plantilla de la sección "Mis plantillas" (KAL-132-03). */
+export interface PlantillaResumen {
+  id_planificacion: number
+  nombre: string
+  descripcion: string | null
+  cantidad_recetas: number
+  created_at: string
+}
+
+/** Lo que se quitó al copiar a un paciente porque no lo puede comer. */
+export interface ItemQuitado {
+  dia_semana: string
+  momento_comida: string
+  id_receta: number
+  nombre: string | null
+  motivo: string
+}
+
+export interface CopiaPlan {
+  plan: PlanificacionDetalle
+  quitados: ItemQuitado[]
+}
+
+/** PATCH /planificaciones/{id}: lo que no se manda no se toca. */
+export interface ActualizarPlanificacionInput {
+  nombre?: string
+  descripcion?: string | null
+  fecha_inicio?: string | null
+  fecha_fin?: string | null
+  objetivos?: ObjetivosPlanInput
+  indicaciones_generales?: string
+  /** Parche: null o vacío borra la nota de esa comida. */
+  notas_comidas?: Record<string, string | null>
+}
+
+/**
+ * Objetivos contra los que se mide un plan. Los planes nuevos guardan los
+ * suyos; `ajustado_para_plan` dice qué cambió el profesional respecto de lo que
+ * proponía la fórmula (`sugerido_para_plan`).
+ */
+export interface ObjetivosPlan {
+  get_objetivo_kcal: number
+  proteinas_g: number
+  grasas_g: number
+  carbohidratos_g: number
+  hidratacion_ml?: number | null
+  prescrito_por_profesional?: string[]
+  ajustado_para_plan?: string[]
+  sugerido_para_plan?: Record<string, number>
+}
+
+export interface OpcionCatalogo {
+  id: number
+  nombre: string
+  codigo?: string
+}
+
+/** GET /planificaciones/parametros */
+export interface ParametrosPlan {
+  id_paciente: number
+  objetivo: OpcionCatalogo | null
+  /** Objetivo propio ("Otro") que rige; excluyente con `objetivo` (KAL-132-06). */
+  objetivo_personalizado?: string | null
+  /** Sin fórmula (objetivo propio): energía y macros de mantenimiento como referencia. */
+  mantenimiento?: ObjetivosPlan | null
+  nivel_actividad: OpcionCatalogo | null
+  objetivos: ObjetivosPlan | null
+  del_paciente: boolean
+  opciones_objetivo: OpcionCatalogo[]
+  opciones_nivel_actividad: OpcionCatalogo[]
+}
+
+/** Lo que el profesional fija para un plan nuevo. No toca el perfil. */
+export interface ObjetivosPlanInput {
+  get_objetivo_kcal: number
+  proteinas_g: number
+  grasas_g: number
+  carbohidratos_g?: number
+}
+
+export interface ParametrosPlanInput {
+  id_objetivo?: number
+  /** Objetivo propio del plan; excluyente con `id_objetivo`. */
+  objetivo_personalizado?: string
+  id_nivel_actividad?: number
+  objetivos?: ObjetivosPlanInput
+  guardar_como_prescripcion?: boolean
 }
 
 /**
@@ -72,10 +170,7 @@ export interface PlanificacionDetalle {
  * no está verificado por el sistema. Los dos se muestran antes de aprobar.
  */
 export type EstadoGeneracion =
-  | "pendiente"
-  | "procesando"
-  | "completada"
-  | "fallida"
+  "pendiente" | "procesando" | "completada" | "fallida"
 
 /** Pedido de borrador al Copiloto. Se resuelve en segundo plano. */
 export interface GeneracionPlan {
@@ -96,6 +191,47 @@ export interface GeneracionIA {
   generado_en: string
   sin_verificar?: string[]
   advertencias?: string[]
+  /** Calculadas por el backend sobre lo persistido: ajuste al objetivo, comidas omitidas, variedad. */
+  advertencias_sistema?: string[]
+  desviacion?: DesviacionIA | null
+  revision_profesional?: RevisionProfesional | null
+  descartes_restricciones?: DescarteRestriccion[]
+}
+
+/** Lo que descartó la revisión automática de una restricción. Juicio del modelo, no certificación. */
+export interface DescarteRestriccion {
+  restriccion: string
+  motivo: string
+  ingredientes: string[]
+  items_descartados: number
+}
+
+export interface MedidaDesviacion {
+  energia: number
+  proteinas: number | null
+  dias_fuera: number
+}
+
+/** Cuánto se aparta el borrador de los objetivos, antes y después de la corrección. */
+export interface DesviacionIA {
+  antes: MedidaDesviacion | null
+  despues: MedidaDesviacion | null
+  umbral: number
+  correccion:
+    | "aplicada"
+    | "descartada"
+    | "fallida"
+    | "no_necesaria"
+    | "deshabilitada"
+    | "sin_objetivo"
+}
+
+/** Cuánto cambió el profesional el borrador antes de publicarlo. */
+export interface RevisionProfesional {
+  agregados: number
+  quitados: number
+  cambiados: number
+  publicado_en: string
 }
 
 /** Campos consumidos del PlanDetailResponse en kalorixia-server/openapi.json. */
@@ -132,3 +268,44 @@ export const DIAS_SEMANA = [
 ]
 
 export const MOMENTOS_COMIDA = ["Desayuno", "Almuerzo", "Merienda", "Cena"]
+
+/** Seguimiento del cumplimiento registrado por el paciente (KAL-132-05). */
+export type EstadoRegistro = "cumplida" | "con_cambios" | "no_cumplida"
+
+export interface ItemRegistro {
+  id_receta: number
+  nombre: string
+}
+
+export interface ConteoCumplimiento {
+  esperadas: number
+  cumplidas: number
+  con_cambios: number
+  no_cumplidas: number
+  sin_registro: number
+  /** cumplidas / esperadas × 100; null sin comidas esperadas. */
+  porcentaje_cumplimiento: number | null
+}
+
+export interface Seguimiento {
+  id_planificacion: number
+  desde: string | null
+  hasta: string | null
+  ultima_fecha_registro: string | null
+  resumen: ConteoCumplimiento
+  semanas: (ConteoCumplimiento & { inicio: string; fin: string })[]
+  /** Del más reciente al más antiguo. */
+  dias: {
+    fecha: string
+    dia_semana: string
+    comidas: {
+      momento_comida: string
+      /** null: sin registro. */
+      estado: EstadoRegistro | null
+      comentario: string | null
+      no_me_gustaron: ItemRegistro[]
+      items: ItemRegistro[]
+    }[]
+  }[]
+  no_me_gustaron: (ItemRegistro & { veces: number })[]
+}

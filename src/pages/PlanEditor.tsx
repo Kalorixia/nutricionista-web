@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
+  BookmarkPlus,
+  Copy,
+  FileDown,
   Loader2,
+  NotebookPen,
+  Pencil,
   Plus,
   RefreshCw,
   ShoppingCart,
@@ -13,7 +18,16 @@ import {
 import { toast } from "sonner"
 import { PublishPlanDialog } from "@/components/modules/plans/PublishPlanDialog"
 import { UnverifiedNotice } from "@/components/modules/plans/UnverifiedNotice"
+import { GenerationMetrics } from "@/components/modules/plans/GenerationMetrics"
 import { RecipeSummaryDialog } from "@/components/modules/plans/RecipeSummaryDialog"
+import { PlanHeaderDialog } from "@/components/modules/plans/PlanHeaderDialog"
+import { TextEditDialog } from "@/components/modules/plans/TextEditDialog"
+import { PlanPdfDialog } from "@/components/modules/plans/PlanPdfDialog"
+import {
+  CopyPlanDialog,
+  type ModoCopia,
+} from "@/components/modules/plans/CopyPlanDialog"
+import { useConfirm } from "@/components/common/ConfirmDialog"
 import { review_summary, slot_key } from "@/utils/plan_review"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -49,6 +63,9 @@ const ESTADO_LABEL: Record<PlanificacionDetalle["estado"], string> = {
 export default function PlanEditor() {
   const { id } = useParams<{ id: string }>()
   const idPlan = Number(id)
+  const navigate = useNavigate()
+  const [copia, set_copia] = useState<ModoCopia | null>(null)
+  const [pdf_open, set_pdf_open] = useState(false)
 
   const [plan, setPlan] = useState<PlanificacionDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -59,7 +76,18 @@ export default function PlanEditor() {
   const [publish_open, set_publish_open] = useState(false)
   const busy_ref = useRef(false)
   const active_id = useRef(idPlan)
-  const read_only = plan?.estado !== "borrador"
+  // Un plan publicado se corrige sin republicarlo (KAL-131-08); sólo el
+  // archivado es de sólo lectura.
+  const read_only = !plan || plan.estado === "archivada"
+  const publicado = plan?.estado === "publicada"
+  const confirm = useConfirm()
+  const edicion_confirmada = useRef(false)
+  const [header_open, set_header_open] = useState(false)
+  const [indicaciones_open, set_indicaciones_open] = useState(false)
+  const [nota_abierta, set_nota_abierta] = useState<{
+    dia: string
+    momento: string
+  } | null>(null)
   const [preview, set_preview] = useState<{
     item: PlanificacionRecetaItem
     dia: string
@@ -87,6 +115,7 @@ export default function PlanEditor() {
 
   useEffect(() => {
     active_id.current = idPlan
+    edicion_confirmada.current = false
     let cancelled = false
     void (async () => {
       setLoading(true)
@@ -170,6 +199,17 @@ export default function PlanEditor() {
 
   const mutate_plan = async (operation: () => Promise<void>) => {
     if (busy_ref.current || read_only) return
+    // El paciente ya tiene este plan: el primer cambio se confirma.
+    if (publicado && !edicion_confirmada.current) {
+      const ok = await confirm({
+        title: "¿Modificar un plan publicado?",
+        description:
+          "El paciente va a ver este cambio de inmediato, sin que vuelvas a publicar. Queda registrado quién y cuándo lo modificó.",
+        confirmText: "Modificar",
+      })
+      if (!ok) return
+      edicion_confirmada.current = true
+    }
     busy_ref.current = true
     set_busy(true)
     try {
@@ -357,28 +397,99 @@ export default function PlanEditor() {
             <h1 className="text-brand-dark font-heading text-3xl font-bold">
               {plan.nombre}
             </h1>
-            <Badge variant="secondary">{ESTADO_LABEL[plan.estado]}</Badge>
+            <Badge variant="secondary">
+              {plan.es_plantilla ? "Plantilla" : ESTADO_LABEL[plan.estado]}
+            </Badge>
           </div>
           <p className="text-muted-foreground">
-            {plan.nombre_paciente}
+            {plan.es_plantilla
+              ? "Plantilla privada: no tiene paciente ni se publica"
+              : plan.nombre_paciente}
             {plan.descripcion ? ` · ${plan.descripcion}` : ""}
           </p>
         </div>
+        {!plan.es_plantilla && (
+          <Button
+            variant="outline"
+            onClick={openShoppingList}
+            className="gap-1.5"
+          >
+            <ShoppingCart className="h-4 w-4" /> Lista de compras
+          </Button>
+        )}
         <Button
           variant="outline"
-          onClick={openShoppingList}
+          onClick={() => set_pdf_open(true)}
           className="gap-1.5"
         >
-          <ShoppingCart className="h-4 w-4" /> Lista de compras
+          <FileDown className="h-4 w-4" /> PDF
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => set_copia("duplicar")}
+          disabled={busy}
+          className="gap-1.5"
+        >
+          {plan.es_plantilla ? (
+            <>
+              <Plus className="h-4 w-4" /> Crear plan para un paciente
+            </>
+          ) : (
+            <>
+              <Copy className="h-4 w-4" /> Duplicar
+            </>
+          )}
+        </Button>
+        {!plan.es_plantilla && (
+          <Button
+            variant="outline"
+            onClick={() => set_copia("plantilla")}
+            disabled={busy}
+            className="gap-1.5"
+          >
+            <BookmarkPlus className="h-4 w-4" /> Guardar como plantilla
+          </Button>
+        )}
         {!read_only && (
+          <Button
+            variant="outline"
+            onClick={() => set_header_open(true)}
+            disabled={busy}
+            className="gap-1.5"
+          >
+            <Pencil className="h-4 w-4" /> Editar datos del plan
+          </Button>
+        )}
+        {plan.estado === "borrador" && !plan.es_plantilla && (
           <Button onClick={handle_publish} disabled={busy}>
             Aprobar y publicar
           </Button>
         )}
       </div>
 
+      {pdf_open && (
+        <PlanPdfDialog plan={plan} onClose={() => set_pdf_open(false)} />
+      )}
+      {copia && (
+        <CopyPlanDialog
+          modo={copia}
+          origen={plan}
+          idPacienteInicial={plan.id_paciente}
+          onClose={() => set_copia(null)}
+          onDone={(resultado) => {
+            set_copia(null)
+            toast.success(
+              resultado.plan.es_plantilla
+                ? "Plantilla guardada"
+                : "Borrador creado"
+            )
+            navigate(`/planificacion/${resultado.plan.id_planificacion}`)
+          }}
+        />
+      )}
+
       <UnverifiedNotice generacion={plan.generacion_ia} />
+      <GenerationMetrics generacion={plan.generacion_ia} />
 
       <RecipeSummaryDialog
         receta={preview?.item.receta ?? null}
@@ -387,18 +498,125 @@ export default function PlanEditor() {
         onClose={() => set_preview(null)}
       />
 
+      {header_open && (
+        <PlanHeaderDialog
+          plan={plan}
+          busy={busy}
+          onClose={() => set_header_open(false)}
+          onSave={(cambios) =>
+            void mutate_plan(async () => {
+              const result = await mealPlansService.update(idPlan, cambios)
+              if (active_id.current === idPlan) {
+                setPlan(result)
+                set_header_open(false)
+              }
+              toast.success("Datos del plan actualizados")
+            })
+          }
+        />
+      )}
+
+      {indicaciones_open && (
+        <TextEditDialog
+          titulo="Indicaciones generales"
+          etiqueta="Indicaciones para el paciente"
+          ayuda="Hidratación, horarios, actividad, recomendaciones."
+          inicial={plan.indicaciones_generales ?? ""}
+          maximo={4000}
+          busy={busy}
+          onClose={() => set_indicaciones_open(false)}
+          onSave={(texto) =>
+            void mutate_plan(async () => {
+              const result = await mealPlansService.update(idPlan, {
+                indicaciones_generales: texto,
+              })
+              if (active_id.current === idPlan) {
+                setPlan(result)
+                set_indicaciones_open(false)
+              }
+              toast.success("Indicaciones guardadas")
+            })
+          }
+        />
+      )}
+      {nota_abierta && (
+        <TextEditDialog
+          titulo={`Nota — ${nota_abierta.dia} / ${nota_abierta.momento}`}
+          etiqueta="Nota para esta comida"
+          ayuda="Por ejemplo: si no tenés tiempo, reemplazá por…"
+          inicial={
+            plan.notas_comidas?.[
+              `${nota_abierta.dia}|${nota_abierta.momento}`
+            ] ?? ""
+          }
+          maximo={500}
+          busy={busy}
+          onClose={() => set_nota_abierta(null)}
+          onSave={(texto) =>
+            void mutate_plan(async () => {
+              const clave = `${nota_abierta.dia}|${nota_abierta.momento}`
+              const result = await mealPlansService.update(idPlan, {
+                notas_comidas: { [clave]: texto || null },
+              })
+              if (active_id.current === idPlan) {
+                setPlan(result)
+                set_nota_abierta(null)
+              }
+              toast.success(texto ? "Nota guardada" : "Nota borrada")
+            })
+          }
+        />
+      )}
+
+      <Card className="space-y-2 p-4" aria-label="Indicaciones generales">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-sm font-medium">Indicaciones generales</h2>
+          {!read_only && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => set_indicaciones_open(true)}
+              className="h-7 gap-1 px-2 text-xs"
+            >
+              <Pencil className="h-3 w-3" />
+              {plan.indicaciones_generales ? "Editar" : "Agregar"}
+            </Button>
+          )}
+        </div>
+        {plan.indicaciones_generales ? (
+          <p className="text-sm whitespace-pre-line">
+            {plan.indicaciones_generales}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sin indicaciones. Agregá hidratación, horarios o recomendaciones
+            para el paciente.
+          </p>
+        )}
+      </Card>
+
       {read_only && (
         <p role="status" className="text-sm text-muted-foreground">
           Este plan está en modo de sólo lectura.
         </p>
       )}
-      {!read_only && review_summary(plan).missing.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {plan.recetas.length
-            ? `${review_summary(plan).missing.length} momentos sin comidas. Revisalos antes de publicar.`
-            : "El borrador todavía no tiene comidas."}
+      {publicado && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Plan publicado: lo que cambies lo ve el paciente de inmediato.
+          {plan.ultima_edicion &&
+            ` Última modificación: ${new Date(plan.ultima_edicion.fecha).toLocaleString("es-AR")} por ${plan.ultima_edicion.usuario} (${plan.ediciones ?? 1} ${(plan.ediciones ?? 1) === 1 ? "cambio" : "cambios"} desde que se publicó).`}
         </p>
       )}
+      {plan.estado === "borrador" &&
+        !plan.es_plantilla &&
+        review_summary(plan).missing.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {plan.recetas.length
+              ? `${review_summary(plan).missing.length} momentos sin comidas. Revisalos antes de publicar.`
+              : "El borrador todavía no tiene comidas."}
+          </p>
+        )}
       {review_summary(plan).outside.length > 0 && (
         <Card className="space-y-2 p-4">
           <h2>Comidas fuera de la grilla: requieren revisión</h2>
@@ -418,6 +636,25 @@ export default function PlanEditor() {
               )}
             </div>
           ))}
+        </Card>
+      )}
+
+      {plan.objetivos_nutricionales && (
+        <Card className="p-4 text-sm" aria-label="Objetivos del plan">
+          <p>
+            <span className="font-medium">Objetivos del plan:</span>{" "}
+            {Math.round(plan.objetivos_nutricionales.get_objetivo_kcal)} kcal ·
+            Proteínas {Math.round(plan.objetivos_nutricionales.proteinas_g)} g ·
+            Carbohidratos{" "}
+            {Math.round(plan.objetivos_nutricionales.carbohidratos_g)} g ·
+            Grasas {Math.round(plan.objetivos_nutricionales.grasas_g)} g
+          </p>
+          {(plan.objetivos_nutricionales.ajustado_para_plan?.length ?? 0) >
+            0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ajustados para este plan; el perfil del paciente no cambió.
+            </p>
+          )}
         </Card>
       )}
 
@@ -502,16 +739,33 @@ export default function PlanEditor() {
                         </div>
                       ))}
                     </div>
+                    {plan.notas_comidas?.[`${dia}|${momento}`] && (
+                      <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-xs whitespace-pre-line dark:bg-amber-950/30">
+                        {plan.notas_comidas[`${dia}|${momento}`]}
+                      </p>
+                    )}
                     {!read_only && (
-                      <Button
-                        disabled={busy}
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openPicker(dia, momento)}
-                        className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-                      >
-                        <Plus className="h-3 w-3" /> Agregar receta
-                      </Button>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          disabled={busy}
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openPicker(dia, momento)}
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        >
+                          <Plus className="h-3 w-3" /> Agregar receta
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Nota de ${dia} ${momento}`}
+                          onClick={() => set_nota_abierta({ dia, momento })}
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        >
+                          <NotebookPen className="h-3 w-3" /> Nota
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )
@@ -528,7 +782,7 @@ export default function PlanEditor() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Agregar receta — {picker?.dia} / {picker?.momento}
+              Agregar receta o alimento — {picker?.dia} / {picker?.momento}
             </DialogTitle>
           </DialogHeader>
           <div className="relative">
@@ -537,7 +791,7 @@ export default function PlanEditor() {
               disabled={busy}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre…"
+              placeholder="Buscar recetas o alimentos…"
               className="rounded-xl pl-9"
               autoFocus
             />
@@ -552,9 +806,14 @@ export default function PlanEditor() {
                   disabled={busy}
                   key={r.id_receta}
                   onClick={() => handleAddRecipe(r)}
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
                 >
-                  {r.nombre}
+                  <span>{r.nombre}</span>
+                  {r.tipo === "alimento" && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      Alimento · {r.porcion_descripcion}
+                    </span>
+                  )}
                 </button>
               ))
             )}

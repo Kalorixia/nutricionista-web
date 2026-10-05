@@ -1,16 +1,22 @@
 import { authedFetch } from "@/services/http"
 import type {
+  ActualizarPlanificacionInput,
+  CopiaPlan,
   GeneracionPlan,
   ListaCompra,
+  ParametrosPlan,
+  ParametrosPlanInput,
   Planificacion,
   PlanificacionDetalle,
+  PlantillaResumen,
+  Seguimiento,
 } from "@/types/mealPlan"
 
 interface ListaPlanificacionesResponse {
   planificaciones: Planificacion[]
 }
 
-export interface CrearPlanificacionInput {
+export interface CrearPlanificacionInput extends ParametrosPlanInput {
   id_paciente: number
   nombre: string
   descripcion?: string
@@ -31,12 +37,37 @@ export const mealPlansService = {
    * sigue con `generationStatus`.
    */
   async generate(
-    input: CrearPlanificacionInput & { indicaciones?: string; momentos?: string[] }
+    input: CrearPlanificacionInput & {
+      indicaciones?: string
+      momentos?: string[]
+    }
   ): Promise<GeneracionPlan> {
     return authedFetch<GeneracionPlan>("/copiloto/borradores", {
       method: "POST",
       body: input,
     })
+  },
+
+  /**
+   * Objetivos sugeridos para un plan nuevo. Sin objetivo ni actividad, los del
+   * paciente; con otros, los recalcula el servidor. No persiste nada.
+   */
+  async parameters(
+    idPaciente: number,
+    options: {
+      id_objetivo?: number
+      id_nivel_actividad?: number
+      objetivo_personalizado?: string
+    } = {}
+  ): Promise<ParametrosPlan> {
+    const params = new URLSearchParams({ id_paciente: String(idPaciente) })
+    if (options.id_objetivo)
+      params.set("id_objetivo", String(options.id_objetivo))
+    if (options.id_nivel_actividad)
+      params.set("id_nivel_actividad", String(options.id_nivel_actividad))
+    if (options.objetivo_personalizado)
+      params.set("objetivo_personalizado", options.objetivo_personalizado)
+    return authedFetch<ParametrosPlan>(`/planificaciones/parametros?${params}`)
   },
 
   async generationStatus(idGeneracion: number): Promise<GeneracionPlan> {
@@ -67,6 +98,50 @@ export const mealPlansService = {
       method: "POST",
       body: input,
     })
+  },
+
+  /** Datos del plan. Vale para borradores y publicados (KAL-131-08). */
+  async update(
+    id: number,
+    input: ActualizarPlanificacionInput
+  ): Promise<PlanificacionDetalle> {
+    return authedFetch<PlanificacionDetalle>(`/planificaciones/${id}`, {
+      method: "PATCH",
+      body: input,
+    })
+  },
+
+  /**
+   * Copia un plan (o una plantilla) como borrador para un paciente. Lo que el
+   * paciente no puede comer se quita y vuelve en `quitados` (KAL-132-03).
+   */
+  async duplicate(
+    id: number,
+    input: { id_paciente: number; nombre?: string }
+  ): Promise<CopiaPlan> {
+    return authedFetch<CopiaPlan>(`/planificaciones/${id}/duplicar`, {
+      method: "POST",
+      body: input,
+    })
+  },
+
+  async saveAsTemplate(id: number, nombre?: string): Promise<CopiaPlan> {
+    return authedFetch<CopiaPlan>(`/planificaciones/${id}/plantilla`, {
+      method: "POST",
+      body: nombre ? { nombre } : {},
+    })
+  },
+
+  async templates(): Promise<PlantillaResumen[]> {
+    const { plantillas } = await authedFetch<{
+      plantillas: PlantillaResumen[]
+    }>("/planificaciones/plantillas")
+    return plantillas
+  },
+
+  /** Lo que registró el paciente sobre un plan propio (KAL-132-05). */
+  async followUp(id: number): Promise<Seguimiento> {
+    return authedFetch<Seguimiento>(`/planificaciones/${id}/seguimiento`)
   },
 
   async remove(id: number): Promise<void> {

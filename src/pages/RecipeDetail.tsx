@@ -62,6 +62,10 @@ export default function RecipeDetail() {
     )
   }
 
+  // Un alimento se come sin preparar: no tiene pasos, tiempo ni dificultad, y
+  // su único ingrediente es él mismo, así que mostrarlo no aporta nada.
+  const alimento = receta.tipo === "alimento"
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
@@ -107,18 +111,29 @@ export default function RecipeDetail() {
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Clock className="h-4 w-4" /> {receta.tiempo_preparacion} min
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Users className="h-4 w-4" /> {receta.porciones} porciones
-        </span>
+        {alimento ? (
+          <>
+            <Badge variant="secondary">Alimento</Badge>
+            {receta.porcion_descripcion && (
+              <span>Porción: {receta.porcion_descripcion}</span>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4" /> {receta.tiempo_preparacion} min
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Users className="h-4 w-4" /> {receta.porciones} porciones
+            </span>
+          </>
+        )}
         {receta.calorias_por_porcion != null && (
           <span className="flex items-center gap-1.5">
             <Flame className="h-4 w-4" /> {receta.calorias_por_porcion} kcal
           </span>
         )}
-        {receta.dificultad && (
+        {!alimento && receta.dificultad && (
           <Badge variant="secondary">{receta.dificultad}</Badge>
         )}
       </div>
@@ -133,7 +148,7 @@ export default function RecipeDetail() {
         </div>
       )}
 
-      {receta.ingredientes.length > 0 && (
+      {!alimento && receta.ingredientes.length > 0 && (
         <Card className="surface-raised border-primary/10 p-5">
           <h2 className="mb-3 font-heading text-lg font-semibold">
             Ingredientes
@@ -162,7 +177,7 @@ export default function RecipeDetail() {
         </Card>
       )}
 
-      {receta.pasos.length > 0 && (
+      {!alimento && receta.pasos.length > 0 && (
         <Card className="surface-raised border-primary/10 p-5">
           <h2 className="mb-3 font-heading text-lg font-semibold">
             Preparación

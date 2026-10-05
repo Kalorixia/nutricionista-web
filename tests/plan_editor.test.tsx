@@ -16,6 +16,16 @@ vi.mock("@/services/mealPlans.service", () => ({
     publish: vi.fn(),
     addRecipe: vi.fn(),
     removeRecipe: vi.fn(),
+    update: vi.fn(),
+    duplicate: vi.fn(),
+    saveAsTemplate: vi.fn(),
+  },
+}))
+vi.mock("@/services/patients.service", () => ({
+  patientsService: {
+    listarPacientes: vi.fn().mockResolvedValue({
+      pacientes: [{ id_paciente: 3, nombre: "Ana", apellido: "Pérez" }],
+    }),
   },
 }))
 vi.mock("@/services/recipes.service", () => ({
@@ -80,7 +90,7 @@ beforeEach(() => {
 })
 
 describe("Revisión del plan", () => {
-  it.each(["publicada", "archivada"] as const)(
+  it.each(["archivada"] as const)(
     "muestra %s sin controles de edición",
     async (estado) => {
       vi.mocked(mealPlansService.get).mockResolvedValue({ ...plan, estado })
@@ -104,7 +114,7 @@ describe("Revisión del plan", () => {
     )
     const dialog = await screen.findByRole("dialog")
     expect(dialog.textContent).toContain("Ana Pérez")
-    expect(dialog.textContent).toContain("1 de 28 momentos cubiertos")
+    expect(dialog.textContent).toContain("1 ítem en 1 comida de la semana")
     expect(mealPlansService.publish).not.toHaveBeenCalled()
     await user.click(within(dialog).getByRole("button", { name: "Cancelar" }))
     expect(mealPlansService.publish).not.toHaveBeenCalled()
@@ -166,7 +176,11 @@ describe("Revisión del plan", () => {
       ).disabled
     ).toBe(true)
     finish({ ...plan, estado: "publicada" })
-    await screen.findByText("Este plan está en modo de sólo lectura.")
+    // Publicado sigue siendo editable, pero avisa que el paciente lo ve.
+    await screen.findByText(/Plan publicado: lo que cambies lo ve el paciente/)
+    expect(
+      screen.queryByRole("button", { name: "Aprobar y publicar" })
+    ).toBeNull()
   })
 
   it("conserva borrador y comidas cuando falla la publicación", async () => {
@@ -222,8 +236,17 @@ describe("Revisión del plan", () => {
     await user.click(
       screen.getAllByRole("button", { name: "Agregar receta" })[1]
     )
-    await user.type(screen.getByPlaceholderText("Buscar por nombre…"), "arroz")
-    const option = await screen.findByRole("button", { name: "Arroz" })
+    await user.type(
+      screen.getByPlaceholderText("Buscar recetas o alimentos…"),
+      "arroz"
+    )
+    // La búsqueda espera el debounce (350 ms) y después la respuesta: con la
+    // máquina cargada, el segundo por defecto de findBy no alcanza.
+    const option = await screen.findByRole(
+      "button",
+      { name: "Arroz" },
+      { timeout: 4000 }
+    )
     await user.dblClick(option)
     expect(mealPlansService.addRecipe).toHaveBeenCalledTimes(1)
     finish({
@@ -298,6 +321,57 @@ describe("Puntos sin verificar del Copiloto", () => {
     expect(within(aviso).getByText(/sin verificar por el sistema/)).toBeTruthy()
   })
 
+  it("muestra aparte lo que midió el sistema sobre el borrador", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      generacion_ia: {
+        ...generacion,
+        sin_verificar: [],
+        advertencias: [],
+        advertencias_sistema: [
+          "Los días quedan en promedio ~600 kcal por debajo del objetivo (2400 kcal).",
+        ],
+      },
+    })
+    mount()
+    const aviso = await screen.findByRole("region", {
+      name: "Puntos sin verificar del borrador",
+    })
+    expect(within(aviso).getByText(/~600 kcal por debajo/)).toBeTruthy()
+    expect(within(aviso).getByText(/calculado por el sistema/)).toBeTruthy()
+  })
+
+  it("agrupa los descartes por restricción, con resumen y detalle plegable", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...plan,
+      generacion_ia: {
+        ...generacion,
+        sin_verificar: [],
+        advertencias: [],
+        descartes_restricciones: [
+          {
+            restriccion: "Celiaquía",
+            motivo: "Contienen trigo o gluten.",
+            ingredientes: ["Harina de trigo", "Pan francés"],
+            items_descartados: 18,
+          },
+        ],
+      },
+    })
+    mount()
+    const aviso = await screen.findByRole("region", {
+      name: "Puntos sin verificar del borrador",
+    })
+    expect(
+      within(aviso).getByText(/2 ingredientes · 18 ítems descartados/)
+    ).toBeTruthy()
+    // El motivo aparece una vez por restricción, no por ingrediente.
+    expect(
+      within(aviso).getAllByText("Contienen trigo o gluten.")
+    ).toHaveLength(1)
+    expect(within(aviso).getByText("Harina de trigo, Pan francés")).toBeTruthy()
+  })
+
   it("no dibuja el aviso en un plan cargado a mano", async () => {
     mount()
     await screen.findByRole("button", { name: "Aprobar y publicar" })
@@ -336,15 +410,195 @@ describe("Fotos y resumen de receta en la grilla", () => {
     ).toHaveProperty("href", expect.stringContaining("/recetas/2"))
   })
 
-  it("en un plan publicado no dibuja las comidas que ese paciente no hace", async () => {
+  it("en un plan archivado no dibuja las comidas que ese paciente no hace", async () => {
     // El plan de prueba sólo tiene desayuno: las otras tres no deben aparecer.
     vi.mocked(mealPlansService.get).mockResolvedValue({
       ...plan,
-      estado: "publicada",
+      estado: "archivada",
     })
     mount()
     await screen.findByText("Este plan está en modo de sólo lectura.")
     expect(screen.queryAllByText("Merienda")).toHaveLength(0)
     expect(screen.queryAllByText("Desayuno").length).toBeGreaterThan(0)
+  })
+})
+
+describe("Edición de un plan publicado (KAL-131-08)", () => {
+  const publicado: PlanificacionDetalle = {
+    ...plan,
+    estado: "publicada",
+    ediciones: 2,
+    ultima_edicion: {
+      fecha: "2026-10-04T15:00:00Z",
+      usuario: "Laura Gómez",
+      accion: "quitar_item",
+    },
+  }
+
+  it("deja editar, pide confirmación una sola vez y muestra la última modificación", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(
+      structuredClone(publicado)
+    )
+    vi.mocked(mealPlansService.removeRecipe).mockResolvedValue()
+    mount()
+    expect(await screen.findByText(/por Laura Gómez \(2 cambios/)).toBeTruthy()
+    const quitar = await screen.findByRole("button", {
+      name: /Quitar Arroz/,
+      hidden: true,
+    })
+    await user.click(quitar)
+    const aviso = await screen.findByRole("alertdialog")
+    expect(
+      within(aviso).getByText(/El paciente va a ver este cambio/)
+    ).toBeTruthy()
+    await user.click(within(aviso).getByRole("button", { name: "Modificar" }))
+    await waitFor(() =>
+      expect(mealPlansService.removeRecipe).toHaveBeenCalledWith(7, 1)
+    )
+  })
+
+  it("si no se confirma, no toca el plan", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(
+      structuredClone(publicado)
+    )
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: /Quitar Arroz/, hidden: true })
+    )
+    const aviso = await screen.findByRole("alertdialog")
+    await user.click(within(aviso).getByRole("button", { name: /Cancelar/ }))
+    expect(mealPlansService.removeRecipe).not.toHaveBeenCalled()
+  })
+
+  it("edita los datos del plan", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(structuredClone(plan))
+    vi.mocked(mealPlansService.update).mockResolvedValue({
+      ...plan,
+      nombre: "Semana corregida",
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: /Editar datos del plan/ })
+    )
+    const nombre = await screen.findByLabelText("Nombre del plan")
+    await user.clear(nombre)
+    await user.type(nombre, "Semana corregida")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(mealPlansService.update).toHaveBeenCalledWith(7, {
+        nombre: "Semana corregida",
+      })
+    )
+    expect(await screen.findByText("Semana corregida")).toBeTruthy()
+  })
+})
+
+describe("Indicaciones y notas para el paciente (KAL-132-02)", () => {
+  it("guarda una nota de comida y la muestra", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(structuredClone(plan))
+    vi.mocked(mealPlansService.update).mockResolvedValue({
+      ...plan,
+      notas_comidas: { "Lunes|Desayuno": "Con un vaso de agua." },
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: "Nota de Lunes Desayuno" })
+    )
+    await user.type(
+      await screen.findByLabelText("Nota para esta comida"),
+      "Con un vaso de agua."
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(mealPlansService.update).toHaveBeenCalledWith(7, {
+        notas_comidas: { "Lunes|Desayuno": "Con un vaso de agua." },
+      })
+    )
+    expect(await screen.findByText("Con un vaso de agua.")).toBeTruthy()
+  })
+
+  it("edita las indicaciones generales", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.get).mockResolvedValue(structuredClone(plan))
+    vi.mocked(mealPlansService.update).mockResolvedValue({
+      ...plan,
+      indicaciones_generales: "Tomá 2 litros de agua.",
+    })
+    mount()
+    const tarjeta = await screen.findByLabelText("Indicaciones generales")
+    await user.click(within(tarjeta).getByRole("button", { name: /Agregar/ }))
+    await user.type(
+      await screen.findByLabelText("Indicaciones para el paciente"),
+      "Tomá 2 litros de agua."
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(mealPlansService.update).toHaveBeenCalledWith(7, {
+        indicaciones_generales: "Tomá 2 litros de agua.",
+      })
+    )
+    expect(await screen.findByText("Tomá 2 litros de agua.")).toBeTruthy()
+  })
+})
+
+describe("Plantillas (KAL-132-03)", () => {
+  it("una plantilla se edita pero no se publica ni tiene paciente", async () => {
+    vi.mocked(mealPlansService.get).mockResolvedValue({
+      ...structuredClone(plan),
+      id_paciente: null,
+      nombre_paciente: "Plantilla",
+      es_plantilla: true,
+    })
+    mount()
+    await screen.findByText(/Plantilla privada/)
+    expect(
+      screen.queryByRole("button", { name: "Aprobar y publicar" })
+    ).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: /Lista de compras/ })
+    ).toBeNull()
+    expect(
+      screen.getByRole("button", { name: /Editar datos del plan/ })
+    ).toBeTruthy()
+    const user = userEvent.setup()
+    await user.click(
+      screen.getByRole("button", { name: /Crear plan para un paciente/ })
+    )
+    const dialogo = await screen.findByRole("dialog")
+    await within(dialogo).findByRole("option", { name: "Ana Pérez" })
+    expect(
+      (within(dialogo).getByLabelText("Nombre") as HTMLInputElement).value
+    ).toBe("Semana de Ana")
+  })
+
+  it("un plan se puede guardar como plantilla desde el editor", async () => {
+    const user = userEvent.setup()
+    vi.mocked(mealPlansService.saveAsTemplate).mockResolvedValue({
+      plan: {
+        ...plan,
+        id_planificacion: 31,
+        id_paciente: null,
+        es_plantilla: true,
+      },
+      quitados: [],
+    })
+    mount()
+    await user.click(
+      await screen.findByRole("button", { name: /Guardar como plantilla/ })
+    )
+    const dialogo = await screen.findByRole("dialog")
+    await user.click(
+      within(dialogo).getByRole("button", { name: "Guardar plantilla" })
+    )
+    await waitFor(() =>
+      expect(mealPlansService.saveAsTemplate).toHaveBeenCalledWith(
+        7,
+        "Semana de Ana"
+      )
+    )
   })
 })

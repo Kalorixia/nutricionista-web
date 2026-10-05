@@ -18,6 +18,8 @@ import { mealPlansService } from "@/services/mealPlans.service"
 import { formatDate } from "@/utils/format"
 import { isNotImplemented } from "@/utils/errors"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
+import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
+import { AdherenceCard } from "@/components/modules/patients/AdherenceCard"
 import type { PacienteDetalle, PerfilPaciente } from "@/types/patient"
 import type { Planificacion } from "@/types/mealPlan"
 
@@ -130,8 +132,8 @@ export default function PatientDetail() {
     return (
       <div className="space-y-4">
         <p className="flex items-center gap-2 text-muted-foreground">
-          <Construction className="h-4 w-4" /> El detalle de pacientes
-          todavía está en desarrollo en el backend.
+          <Construction className="h-4 w-4" /> El detalle de pacientes todavía
+          está en desarrollo en el backend.
         </p>
         <Button variant="outline" render={<Link to="/pacientes" />}>
           Volver a pacientes
@@ -173,7 +175,9 @@ export default function PatientDetail() {
         </div>
         <div className="flex gap-2">
           <Button
-            render={<Link to={`/planificacion?paciente=${paciente.id_paciente}`} />}
+            render={
+              <Link to={`/planificacion?paciente=${paciente.id_paciente}`} />
+            }
             className="gap-1.5"
           >
             <Plus className="h-4 w-4" /> Crear plan
@@ -217,8 +221,17 @@ export default function PatientDetail() {
         </div>
       </Card>
 
+      {perfil && <ClinicalProfileCard perfil={perfil} onChange={set_perfil} />}
       {perfil && (
-        <ClinicalProfileCard perfil={perfil} onChange={set_perfil} />
+        <PreferencesCard
+          idPaciente={perfil.id_paciente}
+          preferencias={perfil.preferencias}
+          onChange={(preferencias) =>
+            set_perfil((actual) =>
+              actual ? { ...actual, preferencias } : actual
+            )
+          }
+        />
       )}
 
       <Card className="space-y-3 p-5">
@@ -259,6 +272,13 @@ export default function PatientDetail() {
           </div>
         </div>
       </Card>
+
+      {!loadingPlanes && (
+        <AdherenceCard
+          key={planes.map((plan) => plan.id_planificacion).join(",")}
+          planes={planes}
+        />
+      )}
 
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">
