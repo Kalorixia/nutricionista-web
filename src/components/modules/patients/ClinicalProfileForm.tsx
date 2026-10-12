@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { RestriccionCombobox } from "@/components/modules/patients/RestriccionCombobox"
 import { patientsService } from "@/services/patients.service"
 import type {
   ActualizarPerfilInput,
@@ -123,6 +124,7 @@ export function ClinicalProfileForm({
   )
   const [nueva_condicion, set_nueva_condicion] = useState("")
   const [nueva_eleccion, set_nueva_eleccion] = useState("")
+  const [busqueda, set_busqueda] = useState("")
   const [nuevo_tipo, set_nuevo_tipo] = useState<TipoRestriccion>("alergia")
 
   useEffect(() => {
@@ -208,6 +210,7 @@ export function ClinicalProfileForm({
       },
     ])
     set_nueva_eleccion("")
+    set_busqueda("")
   }
 
   if (!catalogos) {
@@ -411,35 +414,25 @@ export function ClinicalProfileForm({
           }
         />
         <div className="flex flex-wrap gap-2">
-          <select
-            aria-label="Grupo o ingrediente"
-            className="min-w-0 flex-1 rounded-lg border border-border bg-background p-2 text-sm"
+          <RestriccionCombobox
+            grupos={catalogos.restricciones_alimentarias
+              .filter((item) => !elegidas.has(`grupo:${item.id}`))
+              .map((item) => ({
+                value: `grupo:${item.id}`,
+                label: item.nombre,
+              }))}
+            ingredientes={catalogos.ingredientes
+              .filter((item) => !elegidas.has(`ingrediente:${item.id}`))
+              .map((item) => ({
+                value: `ingrediente:${item.id}`,
+                label: item.nombre,
+              }))}
             value={nueva_eleccion}
+            onValueChange={set_nueva_eleccion}
+            inputValue={busqueda}
+            onInputValueChange={set_busqueda}
             disabled={guardando}
-            onChange={(event) => set_nueva_eleccion(event.target.value)}
-          >
-            <option value="" disabled>
-              Elegí
-            </option>
-            <optgroup label="Grupos de alimentos">
-              {catalogos.restricciones_alimentarias
-                .filter((item) => !elegidas.has(`grupo:${item.id}`))
-                .map((item) => (
-                  <option key={item.id} value={`grupo:${item.id}`}>
-                    {item.nombre}
-                  </option>
-                ))}
-            </optgroup>
-            <optgroup label="Ingredientes">
-              {catalogos.ingredientes
-                .filter((item) => !elegidas.has(`ingrediente:${item.id}`))
-                .map((item) => (
-                  <option key={item.id} value={`ingrediente:${item.id}`}>
-                    {item.nombre}
-                  </option>
-                ))}
-            </optgroup>
-          </select>
+          />
           <select
             aria-label="Tipo de restricción"
             className="rounded-lg border border-border bg-background p-2 text-sm"

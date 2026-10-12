@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { patientsService } from "@/services/patients.service"
@@ -73,13 +73,35 @@ const CATALOGOS = {
   ingredientes: [
     { id: 101, nombre: "Sésamo" },
     { id: 102, nombre: "Salmón" },
+    { id: 103, nombre: "Maní" },
+    // Doce ficticios que coinciden con "fruta": más de los diez que entran a
+    // la vista del menú.
+    ...Array.from({ length: 12 }, (_, indice) => ({
+      id: 201 + indice,
+      nombre: `Fruta ficticia ${String(indice + 1).padStart(2, "0")}`,
+    })),
   ],
 }
 
-function opciones(select: HTMLElement) {
-  return Array.from(select.querySelectorAll("option")).map(
-    (option) => option.textContent
-  )
+type Usuario = ReturnType<typeof userEvent.setup>
+
+const buscador = () => screen.getByLabelText("Grupo o ingrediente")
+
+/** Textos de las opciones que muestra el menú del buscador. */
+const opciones = () =>
+  screen.queryAllByRole("option").map((option) => option.textContent)
+
+/** Escribe en el buscador (vacío) y devuelve los textos de las opciones. */
+async function buscar(user: Usuario, texto: string) {
+  await user.clear(buscador())
+  await user.type(buscador(), texto)
+  return opciones()
+}
+
+/** Busca y elige la opción con ese nombre. */
+async function elegir(user: Usuario, texto: string, opcion: string) {
+  await buscar(user, texto)
+  await user.click(await screen.findByRole("option", { name: opcion }))
 }
 
 beforeEach(() => {
@@ -235,14 +257,13 @@ describe("Perfil clínico editable por el profesional", () => {
       "Preparar una maratón"
     )
     await user.click(screen.getByRole("checkbox", { name: "Celiaquía" }))
-    const eleccion = screen.getByLabelText("Grupo o ingrediente")
     const tipo = screen.getByLabelText("Tipo de restricción")
-    await user.selectOptions(eleccion, "ingrediente:101")
+    await elegir(user, "sesamo", "Sésamo")
     await user.selectOptions(tipo, "alergia")
     await user.click(
       screen.getByRole("button", { name: /Agregar restricción/ })
     )
-    await user.selectOptions(eleccion, "grupo:4")
+    await elegir(user, "lac", "Lactosa")
     await user.selectOptions(tipo, "intolerancia")
     await user.click(
       screen.getByRole("button", { name: /Agregar restricción/ })
@@ -308,19 +329,32 @@ describe("Perfil clínico editable por el profesional", () => {
     )
   })
 
-  it("no ofrece en el selector lo que ya está elegido", async () => {
+  it("no ofrece en el buscador lo que ya está elegido", async () => {
     const user = userEvent.setup()
     render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
     await user.click(screen.getByRole("button", { name: /Editar datos/ }))
-    const eleccion = await screen.findByLabelText("Grupo o ingrediente")
+    await screen.findByLabelText("Grupo o ingrediente")
     // Pescado ya está cargado como aversión.
-    expect(opciones(eleccion)).toEqual(["Elegí", "Lactosa", "Sésamo", "Salmón"])
+    expect(await buscar(user, "pesca")).toEqual([])
+    expect(screen.getByText("Sin resultados")).toBeTruthy()
+    expect(await buscar(user, "s")).toEqual(["Lactosa", "Sésamo", "Salmón"])
 
-    await user.selectOptions(eleccion, "ingrediente:102")
+    await elegir(user, "salm", "Salmón")
+    expect(
+      (buscador() as HTMLInputElement).value,
+      "el buscador muestra lo elegido"
+    ).toBe("Salmón")
     await user.click(
       screen.getByRole("button", { name: /Agregar restricción/ })
     )
-    expect(opciones(eleccion)).toEqual(["Elegí", "Lactosa", "Sésamo"])
+    expect(screen.getByText("alergia: Salmón")).toBeTruthy()
+    expect(
+      (buscador() as HTMLInputElement).value,
+      "después de agregar, el buscador se vacía"
+    ).toBe("")
+    expect(await buscar(user, "s")).toEqual(["Lactosa", "Sésamo"])
+    // Con el menú abierto, el resto de la página queda oculto a lectores.
+    await user.keyboard("{Escape}")
     expect(
       (
         screen.getByRole("button", {
@@ -328,6 +362,83 @@ describe("Perfil clínico editable por el profesional", () => {
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true)
+  })
+
+  it("busca sin distinguir mayúsculas ni acentos, y separa grupos de ingredientes", async () => {
+    const user = userEvent.setup()
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    expect(await buscar(user, "mani")).toEqual(["Maní"])
+    expect(await buscar(user, "SALMON")).toEqual(["Salmón"])
+
+    await buscar(user, "a")
+    const grupos = screen.getByRole("group", { name: "Grupos de alimentos" })
+    const ingredientes = screen.getByRole("group", { name: "Ingredientes" })
+    expect(
+      within(grupos)
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Lactosa"])
+    expect(
+      within(ingredientes).getByRole("option", { name: "Maní" })
+    ).toBeTruthy()
+  })
+
+  it("renderiza todas las coincidencias en un menú de alto máximo con scroll", async () => {
+    const user = userEvent.setup()
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    const encontradas = await buscar(user, "fruta")
+    expect(encontradas).toHaveLength(12)
+    expect(encontradas.at(-1)).toBe("Fruta ficticia 12")
+    expect(screen.queryByText(/Seguí escribiendo/)).toBeNull()
+    // El alto es el de diez opciones de 2.25rem; el resto, con scroll.
+    const lista = screen.getByRole("listbox")
+    expect(lista.className).toContain("max-h-[min(calc(10*2.25rem)")
+    expect(lista.className).toContain("overflow-y-auto")
+  })
+
+  it("se usa con teclado: la opción resaltada se lleva a la vista y Enter la elige", async () => {
+    const user = userEvent.setup()
+    // jsdom no implementa scrollIntoView; el menú lo pide al resaltar.
+    const scroll = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scroll
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    await buscar(user, "fruta")
+    for (let paso = 0; paso < 11; paso++) await user.keyboard("{ArrowDown}")
+    await waitFor(() =>
+      expect((scroll.mock.contexts.at(-1) as Element).textContent).toBe(
+        "Fruta ficticia 11"
+      )
+    )
+    await user.keyboard("{Enter}")
+    expect((buscador() as HTMLInputElement).value).toBe("Fruta ficticia 11")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    expect(
+      vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+        .restricciones_alimentarias
+    ).toEqual([
+      { id_restriccion: 6, tipo: "aversion" },
+      { id_ingrediente: 211, tipo: "alergia" },
+    ])
   })
 
   it("quitar un chip lo saca del cuerpo", async () => {
@@ -359,9 +470,8 @@ describe("Perfil clínico editable por el profesional", () => {
     await user.click(
       await screen.findByRole("button", { name: "Quitar restricción Pescado" })
     )
-    expect(opciones(screen.getByLabelText("Grupo o ingrediente"))).toContain(
-      "Pescado"
-    )
+    expect(await buscar(user, "pescado")).toEqual(["Pescado"])
+    await user.keyboard("{Escape}")
     await user.click(screen.getByRole("button", { name: "Guardar" }))
 
     await waitFor(() =>
