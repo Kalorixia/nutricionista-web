@@ -55,21 +55,27 @@ export interface CondicionPerfil {
   detalle: string | null
 }
 
+export type TipoRestriccion = "alergia" | "intolerancia" | "aversion"
+
+/**
+ * Una restricción del paciente (KAL-40-06): un grupo de alimentos o un
+ * ingrediente puntual, uno solo, y por qué lo evita (`tipo`).
+ */
 export interface RestriccionPerfil {
-  /** Null cuando es una restricción escrita a mano. */
+  /** Grupo de alimentos; null cuando es un ingrediente puntual. */
   id_restriccion?: number | null
-  tipo: string | null
+  /** Ingrediente puntual; null cuando es un grupo de alimentos. */
+  id_ingrediente?: number | null
+  tipo: TipoRestriccion
+  /** Nombre del grupo o del ingrediente. */
   nombre: string
   detalle: string | null
 }
-
-export type TipoRestriccion = "alergia" | "intolerancia" | "aversion"
 
 export interface OpcionRegistro {
   id: number
   nombre: string
   codigo?: string
-  tipo?: string
   descripcion?: string | null
 }
 
@@ -78,8 +84,29 @@ export interface CatalogosRegistro {
   objetivos: OpcionRegistro[]
   niveles_actividad: OpcionRegistro[]
   condiciones_medicas: OpcionRegistro[]
+  /** Grupos de alimentos, por nombre; el `id` se manda como `id_restriccion`. */
   restricciones_alimentarias: OpcionRegistro[]
+  /** Ingredientes, por nombre; el `id` se manda como `id_ingrediente`. */
+  ingredientes: { id: number; nombre: string }[]
 }
+
+/**
+ * Ítem de restricción que acepta el servidor: un grupo o un ingrediente, uno
+ * solo, siempre con su tipo. Sin texto libre (KAL-40-06).
+ */
+export type RestriccionInput =
+  | {
+      id_restriccion: number
+      id_ingrediente?: never
+      tipo: TipoRestriccion
+      detalle?: string
+    }
+  | {
+      id_ingrediente: number
+      id_restriccion?: never
+      tipo: TipoRestriccion
+      detalle?: string
+    }
 
 export interface PerfilPaciente {
   id_paciente: number
@@ -118,12 +145,7 @@ export interface ActualizarPerfilInput {
     nombre_personalizado?: string
     detalle?: string
   }[]
-  restricciones_alimentarias?: {
-    id_restriccion?: number
-    tipo_personalizado?: TipoRestriccion
-    nombre_personalizado?: string
-    detalle?: string
-  }[]
+  restricciones_alimentarias?: RestriccionInput[]
 }
 
 /** Todo opcional: lo que se manda pisa el cálculo, el objeto vacío lo borra. */

@@ -42,7 +42,7 @@ function perfil(overrides: Partial<PerfilPaciente> = {}): PerfilPaciente {
     },
     condiciones_medicas: [],
     restricciones_alimentarias: [
-      { tipo: "aversion", nombre: "Pescado", detalle: null },
+      { id_restriccion: 6, tipo: "aversion", nombre: "Pescado", detalle: null },
     ],
     onboarding_completado: true,
     ...overrides,
@@ -67,9 +67,19 @@ const CATALOGOS = {
     { id: 2, nombre: "Diabetes" },
   ],
   restricciones_alimentarias: [
-    { id: 4, tipo: "intolerancia", nombre: "Lactosa" },
-    { id: 6, tipo: "aversion", nombre: "Pescado" },
+    { id: 4, nombre: "Lactosa" },
+    { id: 6, nombre: "Pescado" },
   ],
+  ingredientes: [
+    { id: 101, nombre: "Sésamo" },
+    { id: 102, nombre: "Salmón" },
+  ],
+}
+
+function opciones(select: HTMLElement) {
+  return Array.from(select.querySelectorAll("option")).map(
+    (option) => option.textContent
+  )
 }
 
 beforeEach(() => {
@@ -225,7 +235,15 @@ describe("Perfil clínico editable por el profesional", () => {
       "Preparar una maratón"
     )
     await user.click(screen.getByRole("checkbox", { name: "Celiaquía" }))
-    await user.type(screen.getByLabelText("Otra restricción"), "Sésamo")
+    const eleccion = screen.getByLabelText("Grupo o ingrediente")
+    const tipo = screen.getByLabelText("Tipo de restricción")
+    await user.selectOptions(eleccion, "ingrediente:101")
+    await user.selectOptions(tipo, "alergia")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    await user.selectOptions(eleccion, "grupo:4")
+    await user.selectOptions(tipo, "intolerancia")
     await user.click(
       screen.getByRole("button", { name: /Agregar restricción/ })
     )
@@ -249,8 +267,109 @@ describe("Perfil clínico editable por el profesional", () => {
       { nombre_personalizado: "Gota" },
     ])
     expect(cambios.restricciones_alimentarias).toEqual([
-      { id_restriccion: 6 },
-      { tipo_personalizado: "alergia", nombre_personalizado: "Sésamo" },
+      { id_restriccion: 6, tipo: "aversion" },
+      { id_ingrediente: 101, tipo: "alergia" },
+      { id_restriccion: 4, tipo: "intolerancia" },
+    ])
+  })
+
+  it("reenvía un ingrediente puntual con su tipo y su detalle, sin texto libre", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(
+      <ClinicalProfileCard
+        perfil={perfil({
+          restricciones_alimentarias: [
+            {
+              id_restriccion: null,
+              id_ingrediente: 102,
+              tipo: "aversion",
+              nombre: "Salmón",
+              detalle: "crudo",
+            },
+          ],
+        })}
+        onChange={vi.fn()}
+      />
+    )
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    expect(await screen.findByText("aversion: Salmón (crudo)")).toBeTruthy()
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    const cambios = vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+    expect(cambios.restricciones_alimentarias).toEqual([
+      { id_ingrediente: 102, tipo: "aversion", detalle: "crudo" },
+    ])
+    expect(JSON.stringify(cambios)).not.toMatch(
+      /nombre_personalizado|tipo_personalizado/
+    )
+  })
+
+  it("no ofrece en el selector lo que ya está elegido", async () => {
+    const user = userEvent.setup()
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    const eleccion = await screen.findByLabelText("Grupo o ingrediente")
+    // Pescado ya está cargado como aversión.
+    expect(opciones(eleccion)).toEqual(["Elegí", "Lactosa", "Sésamo", "Salmón"])
+
+    await user.selectOptions(eleccion, "ingrediente:102")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    expect(opciones(eleccion)).toEqual(["Elegí", "Lactosa", "Sésamo"])
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /Agregar restricción/,
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
+  })
+
+  it("quitar un chip lo saca del cuerpo", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(
+      <ClinicalProfileCard
+        perfil={perfil({
+          restricciones_alimentarias: [
+            {
+              id_restriccion: 6,
+              tipo: "aversion",
+              nombre: "Pescado",
+              detalle: null,
+            },
+            {
+              id_restriccion: null,
+              id_ingrediente: 101,
+              tipo: "alergia",
+              nombre: "Sésamo",
+              detalle: null,
+            },
+          ],
+        })}
+        onChange={vi.fn()}
+      />
+    )
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await user.click(
+      await screen.findByRole("button", { name: "Quitar restricción Pescado" })
+    )
+    expect(opciones(screen.getByLabelText("Grupo o ingrediente"))).toContain(
+      "Pescado"
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    const cambios = vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+    expect(cambios.restricciones_alimentarias).toEqual([
+      { id_ingrediente: 101, tipo: "alergia" },
     ])
   })
 })

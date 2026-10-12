@@ -9,6 +9,7 @@ import type {
   ActualizarPerfilInput,
   CatalogosRegistro,
   PerfilPaciente,
+  RestriccionInput,
   TipoRestriccion,
 } from "@/types/patient"
 
@@ -24,8 +25,20 @@ const TIPOS: { valor: TipoRestriccion; etiqueta: string }[] = [
 interface Propia {
   nombre: string
   detalle: string | null
-  tipo?: TipoRestriccion
 }
+
+/** Una restricción en la lista del formulario: un grupo o un ingrediente. */
+interface RestriccionElegida {
+  origen: "grupo" | "ingrediente"
+  id: number
+  nombre: string
+  tipo: TipoRestriccion
+  detalle: string | null
+}
+
+/** Valor de cada opción del selector: `grupo:<id>` o `ingrediente:<id>`. */
+const clave = (item: Pick<RestriccionElegida, "origen" | "id">) =>
+  `${item.origen}:${item.id}`
 
 function alternar(lista: number[], id: number) {
   return lista.includes(id)
@@ -37,6 +50,11 @@ function alternar(lista: number[], id: number) {
  * Edición clínica completa por el profesional (KAL-131-07): sexo, peso,
  * altura, actividad, objetivo, condiciones y restricciones. Nombre y fecha de
  * nacimiento no: son la identidad del paciente.
+ *
+ * Las restricciones se eligen del catálogo —un grupo de alimentos o un
+ * ingrediente puntual— y cada una lleva su tipo (alergia, intolerancia o
+ * aversión), sin texto libre (KAL-40-06). Para cambiar el tipo se quita y se
+ * vuelve a agregar. Las condiciones médicas conservan el texto libre.
  *
  * Las listas reemplazan a las guardadas, así que todo lo que el formulario no
  * edita (las aclaraciones de cada condición o restricción) se reenvía tal cual.
@@ -84,22 +102,27 @@ export function ClinicalProfileForm({
       .filter((item) => item.id_condicion == null)
       .map((item) => ({ nombre: item.nombre, detalle: item.detalle }))
   )
-  const [restricciones, set_restricciones] = useState<number[]>(
-    perfil.restricciones_alimentarias
-      .map((item) => item.id_restriccion ?? null)
-      .filter((id): id is number => id !== null)
-  )
-  const [restricciones_propias, set_restricciones_propias] = useState<Propia[]>(
-    perfil.restricciones_alimentarias
-      .filter((item) => item.id_restriccion == null)
-      .map((item) => ({
-        nombre: item.nombre,
-        detalle: item.detalle,
-        tipo: (item.tipo as TipoRestriccion | null) ?? "alergia",
-      }))
+  const [restricciones, set_restricciones] = useState<RestriccionElegida[]>(
+    () =>
+      perfil.restricciones_alimentarias.flatMap(
+        (item): RestriccionElegida[] => {
+          const base = {
+            nombre: item.nombre,
+            tipo: item.tipo,
+            detalle: item.detalle,
+          }
+          if (item.id_restriccion != null)
+            return [{ origen: "grupo", id: item.id_restriccion, ...base }]
+          if (item.id_ingrediente != null)
+            return [{ origen: "ingrediente", id: item.id_ingrediente, ...base }]
+          // Sin grupo ni ingrediente no puede existir: el CHECK de origen de
+          // la base lo impide desde KAL-40-06. Si llegara, no se reenvía.
+          return []
+        }
+      )
   )
   const [nueva_condicion, set_nueva_condicion] = useState("")
-  const [nueva_restriccion, set_nueva_restriccion] = useState("")
+  const [nueva_eleccion, set_nueva_eleccion] = useState("")
   const [nuevo_tipo, set_nuevo_tipo] = useState<TipoRestriccion>("alergia")
 
   useEffect(() => {
@@ -125,9 +148,6 @@ export function ClinicalProfileForm({
   const detalle_condicion = (id: number) =>
     perfil.condiciones_medicas.find((item) => item.id_condicion === id)
       ?.detalle ?? null
-  const detalle_restriccion = (id: number) =>
-    perfil.restricciones_alimentarias.find((item) => item.id_restriccion === id)
-      ?.detalle ?? null
 
   const enviar = () => {
     const cambios: ActualizarPerfilInput = {
@@ -141,19 +161,17 @@ export function ClinicalProfileForm({
           ...(item.detalle ? { detalle: item.detalle } : {}),
         })),
       ],
-      restricciones_alimentarias: [
-        ...restricciones.map((id) => ({
-          id_restriccion: id,
-          ...(detalle_restriccion(id)
-            ? { detalle: detalle_restriccion(id)! }
-            : {}),
-        })),
-        ...restricciones_propias.map((item) => ({
-          tipo_personalizado: item.tipo ?? "alergia",
-          nombre_personalizado: item.nombre,
-          ...(item.detalle ? { detalle: item.detalle } : {}),
-        })),
-      ],
+      restricciones_alimentarias: restricciones.map(
+        (item): RestriccionInput => {
+          const resto = {
+            tipo: item.tipo,
+            ...(item.detalle ? { detalle: item.detalle } : {}),
+          }
+          return item.origen === "grupo"
+            ? { id_restriccion: item.id, ...resto }
+            : { id_ingrediente: item.id, ...resto }
+        }
+      ),
     }
     if (sexo) cambios.sexo_biologico = sexo as "femenino" | "masculino"
     if (peso.trim()) cambios.peso_kg = Number(peso)
@@ -164,6 +182,32 @@ export function ClinicalProfileForm({
     else if (objetivo && objetivo !== OTRO)
       cambios.id_objetivo = Number(objetivo)
     onGuardar(cambios)
+  }
+
+  // Lo que ya está en la lista no se ofrece: el servidor rechaza un repetido
+  // aunque cambie el tipo.
+  const elegidas = new Set(restricciones.map(clave))
+
+  const agregar_restriccion = () => {
+    if (!catalogos || !nueva_eleccion) return
+    const [origen, id_texto] = nueva_eleccion.split(":")
+    const id = Number(id_texto)
+    const opcion =
+      origen === "grupo"
+        ? catalogos.restricciones_alimentarias.find((item) => item.id === id)
+        : catalogos.ingredientes.find((item) => item.id === id)
+    if (!opcion || elegidas.has(nueva_eleccion)) return
+    set_restricciones((actual) => [
+      ...actual,
+      {
+        origen: origen === "grupo" ? "grupo" : "ingrediente",
+        id,
+        nombre: opcion.nombre,
+        tipo: nuevo_tipo,
+        detalle: null,
+      },
+    ])
+    set_nueva_eleccion("")
   }
 
   if (!catalogos) {
@@ -302,7 +346,11 @@ export function ClinicalProfileForm({
         </div>
         <ListaPropia
           etiqueta="condición"
-          items={condiciones_propias}
+          items={condiciones_propias.map((item) => ({
+            clave: item.nombre,
+            nombre: item.nombre,
+            texto: `${item.nombre}${item.detalle ? ` (${item.detalle})` : ""}`,
+          }))}
           disabled={guardando}
           onQuitar={(nombre) =>
             set_condiciones_propias((actual) =>
@@ -348,40 +396,50 @@ export function ClinicalProfileForm({
         <legend className="text-sm font-medium">
           Restricciones alimentarias
         </legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {catalogos.restricciones_alimentarias.map((item) => (
-            <label key={item.id} className="flex items-center gap-2 text-sm">
-              <Checkbox
-                disabled={guardando}
-                checked={restricciones.includes(item.id)}
-                onCheckedChange={() =>
-                  set_restricciones((actual) => alternar(actual, item.id))
-                }
-              />
-              {item.nombre}
-            </label>
-          ))}
-        </div>
         <ListaPropia
           etiqueta="restricción"
-          items={restricciones_propias}
+          items={restricciones.map((item) => ({
+            clave: clave(item),
+            nombre: item.nombre,
+            texto: `${item.tipo}: ${item.nombre}${item.detalle ? ` (${item.detalle})` : ""}`,
+          }))}
           disabled={guardando}
-          onQuitar={(nombre) =>
-            set_restricciones_propias((actual) =>
-              actual.filter((item) => item.nombre !== nombre)
+          onQuitar={(quitada) =>
+            set_restricciones((actual) =>
+              actual.filter((item) => clave(item) !== quitada)
             )
           }
         />
         <div className="flex flex-wrap gap-2">
-          <Input
-            aria-label="Otra restricción"
-            placeholder="Otra restricción"
-            maxLength={150}
-            className="flex-1"
-            value={nueva_restriccion}
+          <select
+            aria-label="Grupo o ingrediente"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-background p-2 text-sm"
+            value={nueva_eleccion}
             disabled={guardando}
-            onChange={(event) => set_nueva_restriccion(event.target.value)}
-          />
+            onChange={(event) => set_nueva_eleccion(event.target.value)}
+          >
+            <option value="" disabled>
+              Elegí
+            </option>
+            <optgroup label="Grupos de alimentos">
+              {catalogos.restricciones_alimentarias
+                .filter((item) => !elegidas.has(`grupo:${item.id}`))
+                .map((item) => (
+                  <option key={item.id} value={`grupo:${item.id}`}>
+                    {item.nombre}
+                  </option>
+                ))}
+            </optgroup>
+            <optgroup label="Ingredientes">
+              {catalogos.ingredientes
+                .filter((item) => !elegidas.has(`ingrediente:${item.id}`))
+                .map((item) => (
+                  <option key={item.id} value={`ingrediente:${item.id}`}>
+                    {item.nombre}
+                  </option>
+                ))}
+            </optgroup>
+          </select>
           <select
             aria-label="Tipo de restricción"
             className="rounded-lg border border-border bg-background p-2 text-sm"
@@ -402,20 +460,8 @@ export function ClinicalProfileForm({
             size="sm"
             variant="outline"
             className="gap-1"
-            disabled={guardando || !nueva_restriccion.trim()}
-            onClick={() => {
-              const nombre = nueva_restriccion.trim()
-              if (
-                !restricciones_propias.some(
-                  (item) => item.nombre.toLowerCase() === nombre.toLowerCase()
-                )
-              )
-                set_restricciones_propias((actual) => [
-                  ...actual,
-                  { nombre, detalle: null, tipo: nuevo_tipo },
-                ])
-              set_nueva_restriccion("")
-            }}
+            disabled={guardando || !nueva_eleccion}
+            onClick={agregar_restriccion}
           >
             <Plus className="h-3.5 w-3.5" /> Agregar restricción
           </Button>
@@ -446,6 +492,10 @@ export function ClinicalProfileForm({
   )
 }
 
+/**
+ * Chips con botón de quitar. Cada ítem trae su clave (lo que identifica qué
+ * quitar), el nombre para el botón y el texto que se muestra.
+ */
 function ListaPropia({
   etiqueta,
   items,
@@ -453,26 +503,24 @@ function ListaPropia({
   onQuitar,
 }: {
   etiqueta: string
-  items: Propia[]
+  items: { clave: string; nombre: string; texto: string }[]
   disabled: boolean
-  onQuitar: (nombre: string) => void
+  onQuitar: (clave: string) => void
 }) {
   if (!items.length) return null
   return (
     <ul className="flex flex-wrap gap-1.5">
       {items.map((item) => (
         <li
-          key={item.nombre}
+          key={item.clave}
           className="flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs"
         >
-          {item.tipo ? `${item.tipo}: ` : ""}
-          {item.nombre}
-          {item.detalle ? ` (${item.detalle})` : ""}
+          {item.texto}
           <button
             type="button"
             aria-label={`Quitar ${etiqueta} ${item.nombre}`}
             disabled={disabled}
-            onClick={() => onQuitar(item.nombre)}
+            onClick={() => onQuitar(item.clave)}
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="h-3 w-3" />
