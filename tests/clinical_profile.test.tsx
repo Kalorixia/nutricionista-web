@@ -417,7 +417,8 @@ describe("Perfil clínico editable por el profesional", () => {
     await screen.findByLabelText("Grupo o ingrediente")
 
     await buscar(user, "fruta")
-    for (let paso = 0; paso < 11; paso++) await user.keyboard("{ArrowDown}")
+    // La primera coincidencia ya queda resaltada al escribir (autoHighlight).
+    for (let paso = 0; paso < 10; paso++) await user.keyboard("{ArrowDown}")
     await waitFor(() =>
       expect((scroll.mock.contexts.at(-1) as Element).textContent).toBe(
         "Fruta ficticia 11"
@@ -439,6 +440,41 @@ describe("Perfil clínico editable por el profesional", () => {
       { id_restriccion: 6, tipo: "aversion" },
       { id_ingrediente: 211, tipo: "alergia" },
     ])
+  })
+
+  it("Enter en el buscador elige la primera coincidencia y no guarda", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    await buscar(user, "mani")
+    await user.keyboard("{Enter}")
+    expect((buscador() as HTMLInputElement).value).toBe("Maní")
+    // Elegir no agrega: sigue haciendo falta el botón.
+    expect(screen.queryByText("alergia: Maní")).toBeNull()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(patientsService.actualizarPerfil).not.toHaveBeenCalled()
+  })
+
+  it("Enter sin coincidencias o con el buscador vacío no guarda", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    expect(await buscar(user, "zzz")).toEqual([])
+    await user.keyboard("{Enter}")
+    // Con el menú ya cerrado por el primer Enter, Base UI no intercepta.
+    await user.keyboard("{Enter}")
+    await user.clear(buscador())
+    await user.keyboard("{Escape}")
+    await user.keyboard("{Enter}")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(patientsService.actualizarPerfil).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy()
   })
 
   it("quitar un chip lo saca del cuerpo", async () => {

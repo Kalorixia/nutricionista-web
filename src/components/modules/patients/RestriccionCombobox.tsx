@@ -83,12 +83,20 @@ export function RestriccionCombobox({
       }}
       isItemEqualToValue={(item, actual) => item.value === actual.value}
       filter={coincide}
+      // Al escribir queda resaltada la primera coincidencia: Enter la elige.
+      autoHighlight
       disabled={disabled}
     >
       <div className="relative min-w-0 flex-1">
         <Combobox.Input
           aria-label="Grupo o ingrediente"
           placeholder="Buscá un grupo o ingrediente"
+          // Enter nunca envía el formulario del perfil: sin opción resaltada
+          // (sin coincidencias o con el buscador vacío), Base UI lo dejaría
+          // pasar y se guardaría sin la restricción.
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault()
+          }}
           className="h-9 w-full min-w-0 rounded-lg border border-border bg-background py-2 pr-8 pl-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
         />
         <Combobox.Trigger
