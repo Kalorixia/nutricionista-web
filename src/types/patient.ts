@@ -148,3 +148,53 @@ export interface PreferenciasPaciente {
   personas_hogar?: number | null
   comentarios?: string | null
 }
+
+/** Quién registró una medición u originó un requerimiento; null = sin autor humano. */
+export type CargadaPor = "paciente" | "nutricionista" | null
+
+/** Una medición física activa del paciente (KAL-40). */
+export interface Medicion {
+  id_medicion: number
+  peso_kg: number | null
+  altura_cm: number | null
+  /** Fecha sin hora (`YYYY-MM-DD`): mostrarla con `formatDateOnly`. */
+  fecha_medicion: string
+  /** Cuándo se registró en el sistema, no cuándo se midió. */
+  created_at: string
+  /** Null si se cargó fuera del sistema (carga inicial del historial). */
+  cargada_por: CargadaPor
+}
+
+/** Alta de una medición: peso y altura van los dos; sin fecha, es hoy UTC. */
+export interface RegistrarMedicionInput {
+  peso_kg: number
+  altura_cm: number
+  fecha_medicion?: string | null
+}
+
+/** Prescripción vigente cuando se calculó un requerimiento; null = no fijado. */
+export interface ObjetivoPrescrito {
+  get_objetivo_kcal?: number | null
+  proteinas_g?: number | null
+  grasas_g?: number | null
+  carbohidratos_g?: number | null
+}
+
+/** Una versión del requerimiento nutricional del paciente, con su origen. */
+export interface RequerimientoNutricional {
+  id_requerimiento: number
+  /** Lo que rigió: el cálculo con la prescripción aplicada. */
+  resultado: CalculoNutricional
+  /** Lo que dio la fórmula, antes de la prescripción. */
+  calculo: CalculoNutricional
+  objetivo_prescrito: ObjetivoPrescrito | null
+  version_calculo: string
+  /** Si no figura entre las mediciones activas, se dio de baja después. */
+  id_medicion: number
+  objetivo: { id: number; codigo: string; nombre: string } | null
+  objetivo_personalizado?: string | null
+  nivel_actividad: { id: number; nombre: string }
+  created_at: string
+  /** Null si no hubo autor humano: carga inicial o recálculo automático. */
+  originado_por: CargadaPor
+}

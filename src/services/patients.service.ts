@@ -9,10 +9,21 @@ import type {
   PacienteVinculado,
   CatalogosRegistro,
   PreferenciasPaciente,
+  Medicion,
+  RegistrarMedicionInput,
+  RequerimientoNutricional,
 } from "@/types/patient"
 
 interface ListaCodigosResponse {
   codigos: CodigoVinculacion[]
+}
+
+interface ListaMedicionesResponse {
+  mediciones: Medicion[]
+}
+
+interface ListaRequerimientosResponse {
+  requerimientos: RequerimientoNutricional[]
 }
 
 interface ListaPacientesResponse {
@@ -69,6 +80,43 @@ export const patientsService = {
       `/nutricionistas/me/pacientes/${idPaciente}/objetivo`,
       { method: "PUT", body: objetivo }
     )
+  },
+
+  /** Mediciones activas del paciente, de la más antigua a la más reciente. */
+  async listarMediciones(idPaciente: number): Promise<Medicion[]> {
+    const { mediciones } = await authedFetch<ListaMedicionesResponse>(
+      `/nutricionistas/me/pacientes/${idPaciente}/mediciones`
+    )
+    return mediciones
+  },
+
+  /** Registra una medición a nombre del nutricionista. */
+  registrarMedicion(
+    idPaciente: number,
+    input: RegistrarMedicionInput
+  ): Promise<Medicion> {
+    return authedFetch<Medicion>(
+      `/nutricionistas/me/pacientes/${idPaciente}/mediciones`,
+      { method: "POST", body: input }
+    )
+  },
+
+  /** Da de baja una medición activa; se conserva en el historial clínico. */
+  darDeBajaMedicion(idPaciente: number, idMedicion: number): Promise<void> {
+    return authedFetch(
+      `/nutricionistas/me/pacientes/${idPaciente}/mediciones/${idMedicion}`,
+      { method: "DELETE" }
+    )
+  },
+
+  /** Versiones del requerimiento nutricional, de la más antigua a la más reciente. */
+  async listarRequerimientos(
+    idPaciente: number
+  ): Promise<RequerimientoNutricional[]> {
+    const { requerimientos } = await authedFetch<ListaRequerimientosResponse>(
+      `/nutricionistas/me/pacientes/${idPaciente}/requerimientos`
+    )
+    return requerimientos
   },
 
   generarCodigo(): Promise<CodigoVinculacion> {
