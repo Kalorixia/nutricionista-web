@@ -142,7 +142,7 @@ export function MeasurementsCard({
               <Input
                 id="medicion-peso"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0.1"
                 max="500"
                 required
@@ -157,7 +157,7 @@ export function MeasurementsCard({
               <Input
                 id="medicion-altura"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="30"
                 max="300"
                 required
