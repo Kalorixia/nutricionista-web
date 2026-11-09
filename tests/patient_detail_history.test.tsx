@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -30,19 +31,29 @@ vi.mock("@/services/mealPlans.service", () => ({
   mealPlansService: { list: vi.fn() },
 }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
-// El Perfil clínico tiene sus propios tests: acá solo importa su onChange.
+// El Perfil clínico tiene sus propios tests: acá importan su onChange y que,
+// como el formulario real, copia el peso al montarse.
 vi.mock("@/components/modules/patients/ClinicalProfileCard", () => ({
-  ClinicalProfileCard: ({
+  ClinicalProfileCard: function ClinicalProfileCardMock({
     perfil,
     onChange,
   }: {
     perfil: PerfilPaciente
     onChange: (perfil: PerfilPaciente) => void
-  }) => (
-    <button type="button" onClick={() => onChange(perfil)}>
-      Cambiar perfil
-    </button>
-  ),
+  }) {
+    const [peso_copiado] = useState(perfil.peso_kg)
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => onChange({ ...perfil, peso_kg: 99 })}
+        >
+          Cambiar perfil
+        </button>
+        <span>Peso copiado: {peso_copiado}</span>
+      </>
+    )
+  },
 }))
 
 const PACIENTE: PacienteDetalle = {
@@ -185,6 +196,35 @@ describe("Historial en la ficha del paciente", () => {
       expect(patientsService.obtenerPerfil).toHaveBeenCalledTimes(2)
       expect(patientsService.obtenerPaciente).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it("registrar una medición descarta el formulario del Perfil clínico con el peso viejo", async () => {
+    vi.mocked(patientsService.registrarMedicion).mockResolvedValue({
+      ...MEDICIONES[0],
+      id_medicion: 32,
+    })
+    renderizar()
+    await screen.findByText(`Peso copiado: ${PERFIL.peso_kg}`)
+    vi.mocked(patientsService.obtenerPerfil).mockResolvedValue({
+      ...PERFIL,
+      peso_kg: 60,
+    })
+    await registrar_medicion()
+
+    expect(await screen.findByText("Peso copiado: 60")).toBeTruthy()
+  })
+
+  it("un cambio desde el Perfil clínico no descarta su propio formulario", async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await user.click(
+      await screen.findByRole("button", { name: "Cambiar perfil" })
+    )
+
+    await waitFor(() => {
+      expect(patientsService.listarMediciones).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByText(`Peso copiado: ${PERFIL.peso_kg}`)).toBeTruthy()
   })
 
   it("si el perfil falla en el refresco, la ficha sigue a la vista", async () => {

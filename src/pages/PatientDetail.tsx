@@ -73,6 +73,7 @@ export default function PatientDetail() {
     string | null
   >(null)
   const [version_historial, set_version_historial] = useState(0)
+  const [version_perfil_clinico, set_version_perfil_clinico] = useState(0)
 
   useEffect(() => {
     if (!id) return
@@ -173,7 +174,9 @@ export default function PatientDetail() {
   // Un alta o una baja cambia el peso y la altura vigentes, que se ven en el
   // Card de datos y en el Perfil clínico. Se refrescan en silencio: los
   // efectos de carga inicial, ante un error, mostrarían "Paciente no
-  // encontrado" aunque el cambio ya se hizo.
+  // encontrado" aunque el cambio ya se hizo. El Perfil clínico se remonta
+  // porque su formulario copia peso y altura al abrirse: guardarlo con los
+  // valores viejos registraría otra medición que pisa a la recién cargada.
   const al_cambiar_mediciones = () => {
     refrescar_historial()
     if (!id) return
@@ -181,6 +184,7 @@ export default function PatientDetail() {
       .obtenerPerfil(Number(id))
       .then(set_perfil)
       .catch(() => {})
+      .finally(() => set_version_perfil_clinico((n) => n + 1))
     patientsService
       .obtenerPaciente(Number(id))
       .then(setPaciente)
@@ -303,6 +307,7 @@ export default function PatientDetail() {
 
       {perfil && (
         <ClinicalProfileCard
+          key={version_perfil_clinico}
           perfil={perfil}
           onChange={(actualizado) => {
             set_perfil(actualizado)
