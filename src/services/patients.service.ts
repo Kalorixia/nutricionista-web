@@ -12,6 +12,8 @@ import type {
   Medicion,
   RegistrarMedicionInput,
   RequerimientoNutricional,
+  Observacion,
+  CrearObservacionInput,
 } from "@/types/patient"
 
 interface ListaCodigosResponse {
@@ -31,6 +33,10 @@ interface ListaPacientesResponse {
   total: number
   limit: number
   offset: number
+}
+
+interface ListaObservacionesResponse {
+  observaciones: Observacion[]
 }
 
 export const patientsService = {
@@ -164,5 +170,34 @@ export const patientsService = {
     return authedFetch(`/nutricionistas/me/pacientes/${idPaciente}`, {
       method: "DELETE",
     })
+  },
+  /** Observaciones activas del paciente, de todos los autores, de la más vieja a la más nueva. */
+  async listarObservaciones(idPaciente: number): Promise<Observacion[]> {
+    const { observaciones } = await authedFetch<ListaObservacionesResponse>(
+      `/nutricionistas/me/pacientes/${idPaciente}/observaciones`
+    )
+    return observaciones
+  },
+
+  /** Registra una observación clínica; el servidor recorta los bordes del texto. */
+  crearObservacion(
+    idPaciente: number,
+    input: CrearObservacionInput
+  ): Promise<Observacion> {
+    return authedFetch<Observacion>(
+      `/nutricionistas/me/pacientes/${idPaciente}/observaciones`,
+      { method: "POST", body: input }
+    )
+  },
+
+  /** Baja lógica de una observación propia; no se puede deshacer. */
+  darDeBajaObservacion(
+    idPaciente: number,
+    idObservacion: number
+  ): Promise<void> {
+    return authedFetch(
+      `/nutricionistas/me/pacientes/${idPaciente}/observaciones/${idObservacion}`,
+      { method: "DELETE" }
+    )
   },
 }

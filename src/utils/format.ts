@@ -3,7 +3,8 @@ export function formatDate(iso: string): string {
 }
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR")
+  // Sin `hourCycle`, "es-AR" da 12 horas sin a. m./p. m.: las 15:17 se ven "03:17".
+  return new Date(iso).toLocaleString("es-AR", { hourCycle: "h23" })
 }
 
 /**
