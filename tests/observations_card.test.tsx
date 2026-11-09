@@ -204,6 +204,36 @@ describe("ObservationsCard", () => {
     expect(screen.getByText("Ana Prueba")).toBeTruthy()
   })
 
+  it("no deja guardar hasta que termine la recarga, para que no pise el alta", async () => {
+    vi.mocked(patientsService.darDeBajaObservacion).mockRejectedValue(
+      new ApiError("Observación no encontrada", 404)
+    )
+    renderCard()
+    const boton = await botonBaja()
+    let resolver: (lista: Observacion[]) => void = () => {}
+    vi.mocked(patientsService.listarObservaciones).mockReturnValue(
+      new Promise((resolve) => {
+        resolver = resolve
+      })
+    )
+    await userEvent.click(boton)
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Dar de baja" })
+    )
+    await waitFor(() =>
+      expect(patientsService.listarObservaciones).toHaveBeenCalledTimes(2)
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: /Agregar observación/ })
+    )
+    const guardar = () =>
+      screen.getByRole<HTMLButtonElement>("button", { name: /Guardar/ })
+    expect(guardar().disabled).toBe(true)
+
+    resolver([AJENA])
+    await waitFor(() => expect(guardar().disabled).toBe(false))
+  })
+
   it("un 403 en la baja muestra el mensaje y recarga la lista", async () => {
     vi.mocked(patientsService.darDeBajaObservacion).mockRejectedValue(
       new ApiError("Solo el autor puede dar de baja la observación", 403)

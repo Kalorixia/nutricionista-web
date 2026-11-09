@@ -31,6 +31,7 @@ export function ObservationsCard({ idPaciente }: { idPaciente: number }) {
   const [abierto, setAbierto] = useState(false)
   const [texto, setTexto] = useState("")
   const [enviando, setEnviando] = useState(false)
+  const [recargando, setRecargando] = useState(false)
   const [todas, setTodas] = useState(false)
 
   useEffect(() => {
@@ -50,6 +51,8 @@ export function ObservationsCard({ idPaciente }: { idPaciente: number }) {
               ? e.message
               : "No pudimos cargar las observaciones"
         )
+      } finally {
+        if (vigente) setRecargando(false)
       }
     }
     void cargar()
@@ -58,7 +61,12 @@ export function ObservationsCard({ idPaciente }: { idPaciente: number }) {
     }
   }, [idPaciente, intento])
 
-  const recargar = () => setIntento((n) => n + 1)
+  // Mientras se recarga no se permite otra alta o baja: la respuesta de la
+  // recarga, pedida antes, pisaría ese cambio en la lista.
+  const recargar = () => {
+    setRecargando(true)
+    setIntento((n) => n + 1)
+  }
 
   const cerrar = () => {
     setAbierto(false)
@@ -152,7 +160,7 @@ export function ObservationsCard({ idPaciente }: { idPaciente: number }) {
             </span>
           </div>
           <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={enviando}>
+            <Button type="submit" size="sm" disabled={enviando || recargando}>
               {enviando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{" "}
               Guardar
             </Button>
@@ -207,7 +215,7 @@ export function ObservationsCard({ idPaciente }: { idPaciente: number }) {
                         variant="ghost"
                         className="ml-auto"
                         aria-label={`Dar de baja la observación del ${fecha}`}
-                        disabled={enviando}
+                        disabled={enviando || recargando}
                         onClick={() => void darDeBaja(obs)}
                       >
                         <Trash2 className="h-4 w-4" />
