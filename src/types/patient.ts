@@ -220,3 +220,17 @@ export interface RequerimientoNutricional {
   /** Null si no hubo autor humano: carga inicial o recálculo automático. */
   originado_por: CargadaPor
 }
+
+/** Nota clínica del nutricionista; el paciente no la ve. */
+export interface Observacion {
+  id_observacion: number
+  texto: string
+  created_at: string
+  autor_nombre: string
+  autor_apellido: string
+  es_propia: boolean
+}
+
+export interface CrearObservacionInput {
+  texto: string
+}
