@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { patientsService } from "@/services/patients.service"
@@ -42,7 +42,7 @@ function perfil(overrides: Partial<PerfilPaciente> = {}): PerfilPaciente {
     },
     condiciones_medicas: [],
     restricciones_alimentarias: [
-      { tipo: "aversion", nombre: "Pescado", detalle: null },
+      { id_restriccion: 6, tipo: "aversion", nombre: "Pescado", detalle: null },
     ],
     onboarding_completado: true,
     ...overrides,
@@ -67,9 +67,41 @@ const CATALOGOS = {
     { id: 2, nombre: "Diabetes" },
   ],
   restricciones_alimentarias: [
-    { id: 4, tipo: "intolerancia", nombre: "Lactosa" },
-    { id: 6, tipo: "aversion", nombre: "Pescado" },
+    { id: 4, nombre: "Lactosa" },
+    { id: 6, nombre: "Pescado" },
   ],
+  ingredientes: [
+    { id: 101, nombre: "Sésamo" },
+    { id: 102, nombre: "Salmón" },
+    { id: 103, nombre: "Maní" },
+    // Doce ficticios que coinciden con "fruta": más de los diez que entran a
+    // la vista del menú.
+    ...Array.from({ length: 12 }, (_, indice) => ({
+      id: 201 + indice,
+      nombre: `Fruta ficticia ${String(indice + 1).padStart(2, "0")}`,
+    })),
+  ],
+}
+
+type Usuario = ReturnType<typeof userEvent.setup>
+
+const buscador = () => screen.getByLabelText("Grupo o ingrediente")
+
+/** Textos de las opciones que muestra el menú del buscador. */
+const opciones = () =>
+  screen.queryAllByRole("option").map((option) => option.textContent)
+
+/** Escribe en el buscador (vacío) y devuelve los textos de las opciones. */
+async function buscar(user: Usuario, texto: string) {
+  await user.clear(buscador())
+  await user.type(buscador(), texto)
+  return opciones()
+}
+
+/** Busca y elige la opción con ese nombre. */
+async function elegir(user: Usuario, texto: string, opcion: string) {
+  await buscar(user, texto)
+  await user.click(await screen.findByRole("option", { name: opcion }))
 }
 
 beforeEach(() => {
@@ -225,7 +257,14 @@ describe("Perfil clínico editable por el profesional", () => {
       "Preparar una maratón"
     )
     await user.click(screen.getByRole("checkbox", { name: "Celiaquía" }))
-    await user.type(screen.getByLabelText("Otra restricción"), "Sésamo")
+    const tipo = screen.getByLabelText("Tipo de restricción")
+    await elegir(user, "sesamo", "Sésamo")
+    await user.selectOptions(tipo, "alergia")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    await elegir(user, "lac", "Lactosa")
+    await user.selectOptions(tipo, "intolerancia")
     await user.click(
       screen.getByRole("button", { name: /Agregar restricción/ })
     )
@@ -249,8 +288,234 @@ describe("Perfil clínico editable por el profesional", () => {
       { nombre_personalizado: "Gota" },
     ])
     expect(cambios.restricciones_alimentarias).toEqual([
-      { id_restriccion: 6 },
-      { tipo_personalizado: "alergia", nombre_personalizado: "Sésamo" },
+      { id_restriccion: 6, tipo: "aversion" },
+      { id_ingrediente: 101, tipo: "alergia" },
+      { id_restriccion: 4, tipo: "intolerancia" },
+    ])
+  })
+
+  it("reenvía un ingrediente puntual con su tipo y su detalle, sin texto libre", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(
+      <ClinicalProfileCard
+        perfil={perfil({
+          restricciones_alimentarias: [
+            {
+              id_restriccion: null,
+              id_ingrediente: 102,
+              tipo: "aversion",
+              nombre: "Salmón",
+              detalle: "crudo",
+            },
+          ],
+        })}
+        onChange={vi.fn()}
+      />
+    )
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    expect(await screen.findByText("aversion: Salmón (crudo)")).toBeTruthy()
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    const cambios = vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+    expect(cambios.restricciones_alimentarias).toEqual([
+      { id_ingrediente: 102, tipo: "aversion", detalle: "crudo" },
+    ])
+    expect(JSON.stringify(cambios)).not.toMatch(
+      /nombre_personalizado|tipo_personalizado/
+    )
+  })
+
+  it("no ofrece en el buscador lo que ya está elegido", async () => {
+    const user = userEvent.setup()
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+    // Pescado ya está cargado como aversión.
+    expect(await buscar(user, "pesca")).toEqual([])
+    expect(screen.getByText("Sin resultados")).toBeTruthy()
+    expect(await buscar(user, "s")).toEqual(["Lactosa", "Sésamo", "Salmón"])
+
+    await elegir(user, "salm", "Salmón")
+    expect(
+      (buscador() as HTMLInputElement).value,
+      "el buscador muestra lo elegido"
+    ).toBe("Salmón")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    expect(screen.getByText("alergia: Salmón")).toBeTruthy()
+    expect(
+      (buscador() as HTMLInputElement).value,
+      "después de agregar, el buscador se vacía"
+    ).toBe("")
+    expect(await buscar(user, "s")).toEqual(["Lactosa", "Sésamo"])
+    // Con el menú abierto, el resto de la página queda oculto a lectores.
+    await user.keyboard("{Escape}")
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /Agregar restricción/,
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
+  })
+
+  it("busca sin distinguir mayúsculas ni acentos, y separa grupos de ingredientes", async () => {
+    const user = userEvent.setup()
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    expect(await buscar(user, "mani")).toEqual(["Maní"])
+    expect(await buscar(user, "SALMON")).toEqual(["Salmón"])
+
+    await buscar(user, "a")
+    const grupos = screen.getByRole("group", { name: "Grupos de alimentos" })
+    const ingredientes = screen.getByRole("group", { name: "Ingredientes" })
+    expect(
+      within(grupos)
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Lactosa"])
+    expect(
+      within(ingredientes).getByRole("option", { name: "Maní" })
+    ).toBeTruthy()
+  })
+
+  it("renderiza todas las coincidencias en un menú de alto máximo con scroll", async () => {
+    const user = userEvent.setup()
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    const encontradas = await buscar(user, "fruta")
+    expect(encontradas).toHaveLength(12)
+    expect(encontradas.at(-1)).toBe("Fruta ficticia 12")
+    expect(screen.queryByText(/Seguí escribiendo/)).toBeNull()
+    // El alto es el de diez opciones de 2.25rem; el resto, con scroll.
+    const lista = screen.getByRole("listbox")
+    expect(lista.className).toContain("max-h-[min(calc(10*2.25rem)")
+    expect(lista.className).toContain("overflow-y-auto")
+  })
+
+  it("se usa con teclado: la opción resaltada se lleva a la vista y Enter la elige", async () => {
+    const user = userEvent.setup()
+    // jsdom no implementa scrollIntoView; el menú lo pide al resaltar.
+    const scroll = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scroll
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    await buscar(user, "fruta")
+    // La primera coincidencia ya queda resaltada al escribir (autoHighlight).
+    for (let paso = 0; paso < 10; paso++) await user.keyboard("{ArrowDown}")
+    await waitFor(() =>
+      expect((scroll.mock.contexts.at(-1) as Element).textContent).toBe(
+        "Fruta ficticia 11"
+      )
+    )
+    await user.keyboard("{Enter}")
+    expect((buscador() as HTMLInputElement).value).toBe("Fruta ficticia 11")
+    await user.click(
+      screen.getByRole("button", { name: /Agregar restricción/ })
+    )
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    expect(
+      vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+        .restricciones_alimentarias
+    ).toEqual([
+      { id_restriccion: 6, tipo: "aversion" },
+      { id_ingrediente: 211, tipo: "alergia" },
+    ])
+  })
+
+  it("Enter en el buscador elige la primera coincidencia y no guarda", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    await buscar(user, "mani")
+    await user.keyboard("{Enter}")
+    expect((buscador() as HTMLInputElement).value).toBe("Maní")
+    // Elegir no agrega: sigue haciendo falta el botón.
+    expect(screen.queryByText("alergia: Maní")).toBeNull()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(patientsService.actualizarPerfil).not.toHaveBeenCalled()
+  })
+
+  it("Enter sin coincidencias o con el buscador vacío no guarda", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await screen.findByLabelText("Grupo o ingrediente")
+
+    expect(await buscar(user, "zzz")).toEqual([])
+    await user.keyboard("{Enter}")
+    // Con el menú ya cerrado por el primer Enter, Base UI no intercepta.
+    await user.keyboard("{Enter}")
+    await user.clear(buscador())
+    await user.keyboard("{Escape}")
+    await user.keyboard("{Enter}")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(patientsService.actualizarPerfil).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy()
+  })
+
+  it("quitar un chip lo saca del cuerpo", async () => {
+    const user = userEvent.setup()
+    vi.mocked(patientsService.actualizarPerfil).mockResolvedValue(perfil())
+    render(
+      <ClinicalProfileCard
+        perfil={perfil({
+          restricciones_alimentarias: [
+            {
+              id_restriccion: 6,
+              tipo: "aversion",
+              nombre: "Pescado",
+              detalle: null,
+            },
+            {
+              id_restriccion: null,
+              id_ingrediente: 101,
+              tipo: "alergia",
+              nombre: "Sésamo",
+              detalle: null,
+            },
+          ],
+        })}
+        onChange={vi.fn()}
+      />
+    )
+    await user.click(screen.getByRole("button", { name: /Editar datos/ }))
+    await user.click(
+      await screen.findByRole("button", { name: "Quitar restricción Pescado" })
+    )
+    expect(await buscar(user, "pescado")).toEqual(["Pescado"])
+    await user.keyboard("{Escape}")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() =>
+      expect(patientsService.actualizarPerfil).toHaveBeenCalled()
+    )
+    const cambios = vi.mocked(patientsService.actualizarPerfil).mock.calls[0][1]
+    expect(cambios.restricciones_alimentarias).toEqual([
+      { id_ingrediente: 101, tipo: "alergia" },
     ])
   })
 })

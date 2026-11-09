@@ -50,6 +50,8 @@ export default function ProSidebar() {
   const isActive = (url: string, end?: boolean) =>
     end ? pathname === url : pathname === url || pathname.startsWith(url + "/")
 
+  const ayudaActiva = isActive("/ayuda")
+
   return (
     <Sidebar collapsible="icon">
       <SidebarContent className="bg-sidebar">
@@ -104,10 +106,28 @@ export default function ProSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="gap-2 border-t border-border/60 bg-sidebar p-3">
-        <button className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/50">
-          <HelpCircle className="h-4 w-4" />
-          {!collapsed && <span>Ayuda y Soporte</span>}
-        </button>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={
+                <NavLink
+                  to="/ayuda"
+                  className={`flex items-center gap-2 px-2 ${
+                    ayudaActiva
+                      ? "font-semibold text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                />
+              }
+              isActive={ayudaActiva}
+              tooltip="Ayuda y Soporte"
+              className="rounded-lg"
+            >
+              <HelpCircle className="h-4 w-4" />
+              {!collapsed && <span>Ayuda y Soporte</span>}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger
