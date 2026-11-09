@@ -31,6 +31,9 @@ vi.mock("@/services/mealPlans.service", () => ({
   mealPlansService: { list: vi.fn() },
 }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock("@/components/modules/patients/ObservationsCard", () => ({
+  ObservationsCard: () => null,
+}))
 // El Perfil clínico tiene sus propios tests: acá importan su onChange y que,
 // como el formulario real, copia el peso al montarse.
 vi.mock("@/components/modules/patients/ClinicalProfileCard", () => ({

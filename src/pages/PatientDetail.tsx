@@ -23,6 +23,7 @@ import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
 import { AdherenceCard } from "@/components/modules/patients/AdherenceCard"
 import { MeasurementsCard } from "@/components/modules/patients/MeasurementsCard"
 import { RequirementsCard } from "@/components/modules/patients/RequirementsCard"
+import { ObservationsCard } from "@/components/modules/patients/ObservationsCard"
 import type {
   Medicion,
   PacienteDetalle,
@@ -381,6 +382,7 @@ export default function PatientDetail() {
         error={error_requerimientos}
         onReintentar={refrescar_historial}
       />
+      <ObservationsCard idPaciente={paciente.id_paciente} />
 
       {!loadingPlanes && (
         <AdherenceCard
