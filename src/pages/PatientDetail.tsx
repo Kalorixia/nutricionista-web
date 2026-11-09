@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useConfirm } from "@/components/common/ConfirmDialog"
+import { ApiError } from "@/services/http"
 import { patientsService } from "@/services/patients.service"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { formatDate } from "@/utils/format"
@@ -20,7 +21,14 @@ import { isNotImplemented } from "@/utils/errors"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
 import { AdherenceCard } from "@/components/modules/patients/AdherenceCard"
-import type { PacienteDetalle, PerfilPaciente } from "@/types/patient"
+import { MeasurementsCard } from "@/components/modules/patients/MeasurementsCard"
+import { RequirementsCard } from "@/components/modules/patients/RequirementsCard"
+import type {
+  Medicion,
+  PacienteDetalle,
+  PerfilPaciente,
+  RequerimientoNutricional,
+} from "@/types/patient"
 import type { Planificacion } from "@/types/mealPlan"
 
 function calcularEdad(fechaNacimiento: string): number {
@@ -33,6 +41,13 @@ function calcularEdad(fechaNacimiento: string): number {
       hoy.getDate() < nacimiento.getDate())
   if (aunNoCumplio) edad -= 1
   return edad
+}
+
+/** El mensaje de una carga del historial que falló. */
+function mensaje_historial(error: unknown, por_defecto: string): string {
+  if (error instanceof ApiError && error.status === 404)
+    return "Este paciente ya no está vinculado a tu perfil."
+  return error instanceof Error ? error.message : por_defecto
 }
 
 export default function PatientDetail() {
@@ -48,6 +63,16 @@ export default function PatientDetail() {
 
   const [planes, setPlanes] = useState<Planificacion[]>([])
   const [loadingPlanes, setLoadingPlanes] = useState(true)
+
+  const [mediciones, set_mediciones] = useState<Medicion[] | null>(null)
+  const [requerimientos, set_requerimientos] = useState<
+    RequerimientoNutricional[] | null
+  >(null)
+  const [error_mediciones, set_error_mediciones] = useState<string | null>(null)
+  const [error_requerimientos, set_error_requerimientos] = useState<
+    string | null
+  >(null)
+  const [version_historial, set_version_historial] = useState(0)
 
   useEffect(() => {
     if (!id) return
@@ -106,6 +131,61 @@ export default function PatientDetail() {
       cancelled = true
     }
   }, [id])
+
+  // El historial se pide aparte: una lista que falla no tapa a la otra. Al
+  // recargar no se vuelven a null (sin parpadeo): se reemplazan al llegar.
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    patientsService
+      .listarMediciones(Number(id))
+      .then((result) => {
+        if (cancelled) return
+        set_mediciones(result)
+        set_error_mediciones(null)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        set_error_mediciones(
+          mensaje_historial(error, "No pudimos cargar las mediciones")
+        )
+      })
+    patientsService
+      .listarRequerimientos(Number(id))
+      .then((result) => {
+        if (cancelled) return
+        set_requerimientos(result)
+        set_error_requerimientos(null)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        set_error_requerimientos(
+          mensaje_historial(error, "No pudimos cargar los requerimientos")
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id, version_historial])
+
+  const refrescar_historial = () => set_version_historial((n) => n + 1)
+
+  // Un alta o una baja cambia el peso y la altura vigentes, que se ven en el
+  // Card de datos y en el Perfil clínico. Se refrescan en silencio: los
+  // efectos de carga inicial, ante un error, mostrarían "Paciente no
+  // encontrado" aunque el cambio ya se hizo.
+  const al_cambiar_mediciones = () => {
+    refrescar_historial()
+    if (!id) return
+    patientsService
+      .obtenerPerfil(Number(id))
+      .then(set_perfil)
+      .catch(() => {})
+    patientsService
+      .obtenerPaciente(Number(id))
+      .then(setPaciente)
+      .catch(() => {})
+  }
 
   const handleDesvincular = async () => {
     if (!paciente) return
@@ -221,7 +301,15 @@ export default function PatientDetail() {
         </div>
       </Card>
 
-      {perfil && <ClinicalProfileCard perfil={perfil} onChange={set_perfil} />}
+      {perfil && (
+        <ClinicalProfileCard
+          perfil={perfil}
+          onChange={(actualizado) => {
+            set_perfil(actualizado)
+            refrescar_historial()
+          }}
+        />
+      )}
       {perfil && (
         <PreferencesCard
           idPaciente={perfil.id_paciente}
@@ -272,6 +360,22 @@ export default function PatientDetail() {
           </div>
         </div>
       </Card>
+
+      <MeasurementsCard
+        idPaciente={paciente.id_paciente}
+        mediciones={mediciones}
+        error={error_mediciones}
+        pesoVigente={perfil?.peso_kg ?? null}
+        alturaVigente={perfil?.altura_cm ?? null}
+        onCambio={al_cambiar_mediciones}
+        onReintentar={refrescar_historial}
+      />
+      <RequirementsCard
+        requerimientos={requerimientos}
+        mediciones={mediciones}
+        error={error_requerimientos}
+        onReintentar={refrescar_historial}
+      />
 
       {!loadingPlanes && (
         <AdherenceCard
