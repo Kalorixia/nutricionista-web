@@ -94,6 +94,21 @@ describe("Tarjeta de mediciones", () => {
     expect(screen.getByText(/Es la única medición/)).toBeTruthy()
   })
 
+  it("la precarga con dos decimales no traba el formulario", async () => {
+    const user = userEvent.setup()
+    renderizar({ pesoVigente: 70.25, alturaVigente: 163.55 })
+    await user.click(screen.getByRole("button", { name: "Registrar medición" }))
+
+    expect(valor("Peso (kg)")).toBe("70.25")
+    expect(
+      (
+        screen.getByRole("form", {
+          name: "Registrar medición",
+        }) as HTMLFormElement
+      ).checkValidity()
+    ).toBe(true)
+  })
+
   it("registra una medición precargada con el vigente y la fecha de hoy", async () => {
     const user = userEvent.setup()
     vi.mocked(patientsService.registrarMedicion).mockResolvedValue(
