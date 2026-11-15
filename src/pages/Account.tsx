@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/hooks/use-auth"
+import { useDisclaimer } from "@/hooks/use-disclaimer"
+import DisclaimerDialog from "@/components/modules/disclaimer/DisclaimerDialog"
+import { formatDateTime } from "@/utils/format"
 import { authService } from "@/services/authService"
 import { nutritionistService } from "@/services/nutritionist.service"
 import type { EstadoMatriculaDetalle } from "@/types/auth"
@@ -24,6 +27,8 @@ const ESTADO_LABEL: Record<EstadoMatriculaDetalle["estado"], string> = {
 
 export default function Account() {
   const { user } = useAuth()
+  const { disclaimer } = useDisclaimer()
+  const [leyendo, setLeyendo] = useState(false)
   const [detalle, setDetalle] = useState<EstadoMatriculaDetalle | null>(null)
   const [loadingDetalle, setLoadingDetalle] = useState(true)
 
@@ -117,6 +122,32 @@ export default function Account() {
           )
         )}
       </Card>
+
+      {disclaimer && (
+        <Card className="space-y-3 p-5 text-sm">
+          <h2 className="font-heading text-lg font-semibold">Aviso médico</h2>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Texto</span>
+            <span className="font-medium">Versión {disclaimer.version}</span>
+          </div>
+          {disclaimer.fecha_aceptacion && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Aceptado el</span>
+              <span className="font-medium">
+                {formatDateTime(disclaimer.fecha_aceptacion)}
+              </span>
+            </div>
+          )}
+          <Button variant="outline" onClick={() => setLeyendo(true)}>
+            Leer
+          </Button>
+          <DisclaimerDialog
+            disclaimer={disclaimer}
+            open={leyendo}
+            onOpenChange={setLeyendo}
+          />
+        </Card>
+      )}
 
       <Card className="space-y-4 p-5">
         <h2 className="font-heading text-lg font-semibold">

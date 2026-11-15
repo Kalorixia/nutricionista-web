@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom"
 import { Clock3, LogOut, RefreshCw, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
+import { useDisclaimer } from "@/hooks/use-disclaimer"
+import DisclaimerDialog from "@/components/modules/disclaimer/DisclaimerDialog"
 import { useConfirmedSignOut } from "@/hooks/use-confirmed-sign-out"
 import { nutritionistService } from "@/services/nutritionist.service"
 import KalorixiaLoader from "@/components/common/KalorixiaLoader"
@@ -12,6 +14,8 @@ const POLL_MS = 15_000
 
 export default function Pending() {
   const { refreshMe } = useAuth()
+  const { disclaimer } = useDisclaimer()
+  const [leyendo, setLeyendo] = useState(false)
   const handleSignOut = useConfirmedSignOut()
   const navigate = useNavigate()
   const [detalle, setDetalle] = useState<EstadoMatriculaDetalle | null>(null)
@@ -130,6 +134,23 @@ export default function Pending() {
             >
               <LogOut className="size-4" /> Cerrar sesión
             </Button>
+
+            {disclaimer && (
+              <>
+                <Button
+                  variant="link"
+                  onClick={() => setLeyendo(true)}
+                  className="mt-2 w-full"
+                >
+                  Leer el aviso médico que aceptaste
+                </Button>
+                <DisclaimerDialog
+                  disclaimer={disclaimer}
+                  open={leyendo}
+                  onOpenChange={setLeyendo}
+                />
+              </>
+            )}
           </>
         )}
       </div>

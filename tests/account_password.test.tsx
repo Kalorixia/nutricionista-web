@@ -12,6 +12,9 @@ vi.mock("@/hooks/use-auth", () => ({
     user: { nombre: "Ana", apellido: "Pérez", email: "ana@example.com" },
   }),
 }))
+vi.mock("@/hooks/use-disclaimer", () => ({
+  useDisclaimer: () => ({ disclaimer: null }),
+}))
 vi.mock("@/services/nutritionist.service", () => ({
   nutritionistService: { estadoMatricula: vi.fn() },
 }))
