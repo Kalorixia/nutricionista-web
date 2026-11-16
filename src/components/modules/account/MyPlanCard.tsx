@@ -97,6 +97,13 @@ export default function MyPlanCard() {
             used={data.uso.generaciones_mes}
             max={data.plan.max_generaciones_mes}
           />
+          <p className="text-sm">
+            Tus pacientes pueden hacer hasta{" "}
+            <span className="font-semibold">
+              {data.plan.max_consultas_asistente_dia}
+            </span>{" "}
+            consultas por día al asistente de cocina.
+          </p>
           <p className="text-xs text-muted-foreground">
             Los pedidos al Copiloto que fallan no cuentan. El cupo se renueva el
             primer día de cada mes. Para cambiar de plan, contactá al

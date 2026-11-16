@@ -13,6 +13,7 @@ const PLAN = {
   nombre: "Starter",
   max_pacientes_activos: 15,
   max_generaciones_mes: 20,
+  max_consultas_asistente_dia: 30,
 }
 
 function suscripcion(pacientes: number, generaciones: number): MiSuscripcion {

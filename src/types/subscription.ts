@@ -3,6 +3,8 @@ export interface PlanSuscripcion {
   nombre: string
   max_pacientes_activos: number
   max_generaciones_mes: number
+  /** Consultas diarias al asistente de cocina de cada paciente vinculado. */
+  max_consultas_asistente_dia: number
 }
 
 export interface UsoSuscripcion {
