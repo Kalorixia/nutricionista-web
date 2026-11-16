@@ -115,7 +115,7 @@ export function ProgressCard({
   return (
     <Card className="space-y-4 p-5" aria-label="Progreso">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Progreso</h2>
+        <h2 className="font-heading text-lg font-semibold">Progreso</h2>
         <Button
           size="sm"
           variant="outline"
@@ -219,46 +219,49 @@ function Peso({ datos }: { datos: HistorialProgreso }) {
   const puntos = puntos_peso(con_peso, ANCHO_GRAFICO, ALTO_GRAFICO)
 
   return (
-    <div className="space-y-1.5 text-sm">
-      <p>
-        <span className="text-muted-foreground">Objetivo:</span> {objetivo}
-      </p>
-      {con_peso.length === 0 ? (
-        <p className="text-muted-foreground">Sin mediciones</p>
-      ) : con_peso.length === 1 ? (
-        <p>
-          Peso: <span className="font-medium">{kg(primera.peso_kg)}</span> (
-          {formatDateOnly(primera.fecha_medicion)})
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+    <div className="grid gap-3 text-sm sm:grid-cols-2">
+      <div className="rounded-lg border border-border p-3">
+        <p className="text-xs text-muted-foreground">Objetivo</p>
+        <p className="font-medium">{objetivo}</p>
+      </div>
+      <div className="space-y-1 rounded-lg border border-border p-3">
+        <p className="text-xs text-muted-foreground">Peso</p>
+        {con_peso.length === 0 ? (
+          <p className="text-muted-foreground">Sin mediciones</p>
+        ) : con_peso.length === 1 ? (
           <p>
-            Peso: {kg(primera.peso_kg)} (
-            {formatDateOnly(primera.fecha_medicion)}) →{" "}
-            <span className="font-medium">{kg(ultima.peso_kg)}</span> (
-            {formatDateOnly(ultima.fecha_medicion)}){" "}
-            <span className="font-medium tabular-nums">
-              {diferencia_kg(primera.peso_kg, ultima.peso_kg)}
-            </span>
+            <span className="font-medium">{kg(primera.peso_kg)}</span> (
+            {formatDateOnly(primera.fecha_medicion)})
           </p>
-          <svg
-            role="img"
-            aria-label={`Evolución del peso: de ${kg(primera.peso_kg)} a ${kg(ultima.peso_kg)}`}
-            viewBox={`0 0 ${ANCHO_GRAFICO} ${ALTO_GRAFICO}`}
-            width={ANCHO_GRAFICO}
-            height={ALTO_GRAFICO}
-            className="text-primary"
-          >
-            <polyline
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              points={puntos.map((p) => `${p.x},${p.y}`).join(" ")}
-            />
-          </svg>
-        </div>
-      )}
+        ) : (
+          <>
+            <p>
+              {kg(primera.peso_kg)} ({formatDateOnly(primera.fecha_medicion)}) →{" "}
+              <span className="font-medium">{kg(ultima.peso_kg)}</span> (
+              {formatDateOnly(ultima.fecha_medicion)}){" "}
+              <span className="font-medium tabular-nums">
+                {diferencia_kg(primera.peso_kg, ultima.peso_kg)}
+              </span>
+            </p>
+            <svg
+              role="img"
+              aria-label={`Evolución del peso: de ${kg(primera.peso_kg)} a ${kg(ultima.peso_kg)}`}
+              viewBox={`0 0 ${ANCHO_GRAFICO} ${ALTO_GRAFICO}`}
+              width={ANCHO_GRAFICO}
+              height={ALTO_GRAFICO}
+              className="text-primary"
+            >
+              <polyline
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+                points={puntos.map((p) => `${p.x},${p.y}`).join(" ")}
+              />
+            </svg>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -322,16 +325,27 @@ function Semana({
 
   return (
     <section
-      className="space-y-2 border-t border-border pt-3"
+      className="space-y-2 rounded-lg border border-border p-3"
       aria-label={`Semana del ${fecha_corta(semana.inicio, false)}`}
     >
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <h3 className="text-sm font-medium">
-          {fecha_corta(semana.inicio, false)} – {fecha_corta(semana.fin, false)}
-        </h3>
-        <span className="font-semibold tabular-nums">
-          {semana.adherencia.porcentaje_cumplimiento ?? 0}%
-        </span>
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-sm font-medium">
+            {fecha_corta(semana.inicio, false)} –{" "}
+            {fecha_corta(semana.fin, false)}
+          </h3>
+          <span className="text-lg font-semibold tabular-nums">
+            {semana.adherencia.porcentaje_cumplimiento ?? 0}%
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{
+              width: `${semana.adherencia.porcentaje_cumplimiento ?? 0}%`,
+            }}
+          />
+        </div>
         <Desglose conteo={semana.adherencia} />
       </div>
 
@@ -362,68 +376,74 @@ function Semana({
 
       <ul className="divide-y divide-border text-sm" aria-label="Por día">
         {semana.dias.map((dia) => (
-          <li key={dia.fecha} className="space-y-1 py-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="w-20 shrink-0 font-medium capitalize">
-                {fecha_corta(dia.fecha)}
-              </span>
-              {dia.comidas.map((comida) => (
-                <span
-                  key={comida.momento_comida}
-                  title={comida.items.map((item) => item.nombre).join(", ")}
-                  className={cn(
-                    "rounded-md border px-2 py-0.5 text-xs",
-                    comida.estado
-                      ? ESTADO_REGISTRO[comida.estado].clase
-                      : "border-dashed border-border text-muted-foreground"
-                  )}
-                >
-                  {comida.momento_comida}
-                  {cruza_planes && ` (${nombre_plan(comida.id_planificacion)})`}
-                  {comida.estado ? "" : " · sin registro"}
-                </span>
-              ))}
+          <li
+            key={dia.fecha}
+            className="grid grid-cols-[5rem_1fr] gap-x-2 py-2"
+          >
+            <span className="font-medium capitalize">
+              {fecha_corta(dia.fecha)}
+            </span>
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {dia.comidas.map((comida) => (
+                  <span
+                    key={comida.momento_comida}
+                    title={comida.items.map((item) => item.nombre).join(", ")}
+                    className={cn(
+                      "rounded-md border px-2 py-0.5 text-xs",
+                      comida.estado
+                        ? ESTADO_REGISTRO[comida.estado].clase
+                        : "border-dashed border-border text-muted-foreground"
+                    )}
+                  >
+                    {comida.momento_comida}
+                    {cruza_planes &&
+                      ` (${nombre_plan(comida.id_planificacion)})`}
+                    {comida.estado ? "" : " · sin registro"}
+                  </span>
+                ))}
+              </div>
+              {dia.comidas
+                .filter(
+                  (c) =>
+                    c.comentario ||
+                    c.no_me_gustaron.length ||
+                    c.estado === "con_cambios" ||
+                    c.preparadas.length
+                )
+                .map((comida) => (
+                  <p
+                    key={comida.momento_comida}
+                    className="text-xs text-muted-foreground"
+                  >
+                    <span className="font-medium text-foreground">
+                      {comida.momento_comida}:
+                    </span>{" "}
+                    {[
+                      comida.comentario ? `“${comida.comentario}”` : null,
+                      comida.estado === "con_cambios" && comida.items.length
+                        ? `comió ${comida.items.map((i) => i.nombre).join(", ")}`
+                        : null,
+                      comida.preparadas.length
+                        ? `preparó ${comida.preparadas.map((i) => i.nombre).join(", ")}`
+                        : null,
+                      comida.no_me_gustaron.length ? (
+                        <ThumbsDownTexto
+                          key="nmg"
+                          items={comida.no_me_gustaron.map((i) => i.nombre)}
+                        />
+                      ) : null,
+                    ]
+                      .filter(Boolean)
+                      .map((parte, i) => (
+                        <span key={i}>
+                          {i > 0 ? " · " : ""}
+                          {parte}
+                        </span>
+                      ))}
+                  </p>
+                ))}
             </div>
-            {dia.comidas
-              .filter(
-                (c) =>
-                  c.comentario ||
-                  c.no_me_gustaron.length ||
-                  c.estado === "con_cambios" ||
-                  c.preparadas.length
-              )
-              .map((comida) => (
-                <p
-                  key={comida.momento_comida}
-                  className="pl-20 text-xs text-muted-foreground"
-                >
-                  <span className="font-medium text-foreground">
-                    {comida.momento_comida}:
-                  </span>{" "}
-                  {[
-                    comida.comentario ? `“${comida.comentario}”` : null,
-                    comida.estado === "con_cambios" && comida.items.length
-                      ? `comió ${comida.items.map((i) => i.nombre).join(", ")}`
-                      : null,
-                    comida.preparadas.length
-                      ? `preparó ${comida.preparadas.map((i) => i.nombre).join(", ")}`
-                      : null,
-                    comida.no_me_gustaron.length ? (
-                      <ThumbsDownTexto
-                        key="nmg"
-                        items={comida.no_me_gustaron.map((i) => i.nombre)}
-                      />
-                    ) : null,
-                  ]
-                    .filter(Boolean)
-                    .map((parte, i) => (
-                      <span key={i}>
-                        {i > 0 ? " · " : ""}
-                        {parte}
-                      </span>
-                    ))}
-                </p>
-              ))}
           </li>
         ))}
       </ul>

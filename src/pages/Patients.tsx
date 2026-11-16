@@ -67,7 +67,7 @@ export default function Patients() {
   const loadCodigos = async () => {
     setLoadingCodigos(true)
     try {
-      setCodigos(await patientsService.listarCodigos())
+      setCodigos(await patientsService.listarCodigos("activo"))
       setCodigosDev(false)
     } catch (error) {
       if (isNotImplemented(error)) setCodigosDev(true)
@@ -157,7 +157,6 @@ export default function Patients() {
   }
 
   const codigosActivos = codigos.filter((c) => c.estado === "activo")
-  const codigosHistorial = codigos.filter((c) => c.estado !== "activo")
 
   return (
     <div className="space-y-8">
@@ -170,7 +169,11 @@ export default function Patients() {
             Generá un código para que un paciente se vincule a tu perfil.
           </p>
         </div>
-        <Button onClick={handleGenerar} disabled={generating} className="gap-1.5">
+        <Button
+          onClick={handleGenerar}
+          disabled={generating}
+          className="gap-1.5"
+        >
           {generating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -189,8 +192,8 @@ export default function Patients() {
         ) : codigosDev ? (
           <Card>
             <EnDesarrollo>
-              La generación de códigos de vinculación todavía está en
-              desarrollo en el backend.
+              La generación de códigos de vinculación todavía está en desarrollo
+              en el backend.
             </EnDesarrollo>
           </Card>
         ) : (
@@ -239,27 +242,6 @@ export default function Patients() {
             )}
           </Card>
         )}
-
-        {codigosHistorial.length > 0 && (
-          <details className="text-sm text-muted-foreground">
-            <summary className="cursor-pointer select-none">
-              Ver historial de códigos ({codigosHistorial.length})
-            </summary>
-            <Card className="mt-2 divide-y divide-border">
-              {codigosHistorial.map((c) => (
-                <div
-                  key={c.id_codigo}
-                  className="flex items-center gap-3 p-3 text-xs"
-                >
-                  <span className="font-mono tracking-widest">{c.codigo}</span>
-                  <Badge variant={ESTADO_VARIANT[c.estado]}>
-                    {ESTADO_LABEL[c.estado]}
-                  </Badge>
-                </div>
-              ))}
-            </Card>
-          </details>
-        )}
       </section>
 
       <section className="space-y-3">
@@ -287,8 +269,8 @@ export default function Patients() {
         ) : pacientesDev ? (
           <Card>
             <EnDesarrollo>
-              La lista de pacientes vinculados todavía está en desarrollo en
-              el backend.
+              La lista de pacientes vinculados todavía está en desarrollo en el
+              backend.
             </EnDesarrollo>
           </Card>
         ) : (

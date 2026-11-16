@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/common/PasswordInput"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/hooks/use-auth"
@@ -156,9 +156,8 @@ export default function Account() {
         <form onSubmit={handleChangePassword} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="current-password">Contraseña actual</Label>
-            <Input
+            <PasswordInput
               id="current-password"
-              type="password"
               autoComplete="current-password"
               required
               value={currentPassword}
@@ -167,9 +166,8 @@ export default function Account() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-password">Contraseña nueva</Label>
-            <Input
+            <PasswordInput
               id="new-password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={8}

@@ -10,6 +10,7 @@ import RequireApprovedNutritionist from "@/routes/RequireApprovedNutritionist"
 import ProLayout from "@/components/modules/layout/ProLayout"
 import Login from "@/pages/Login"
 import Signup from "@/pages/Signup"
+import ForgotPassword from "@/pages/ForgotPassword"
 import VerifyEmail from "@/pages/VerifyEmail"
 import Pending from "@/pages/Pending"
 import Disclaimer from "@/pages/Disclaimer"
@@ -42,6 +43,10 @@ export function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route
+                path="/recuperar-contrasena"
+                element={<ForgotPassword />}
+              />
               <Route path="/verificar-email" element={<VerifyEmail />} />
 
               <Route element={<RequireAuth />}>

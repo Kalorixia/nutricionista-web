@@ -17,6 +17,7 @@ import { ApiError } from "@/services/http"
 import { patientsService } from "@/services/patients.service"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { formatDate } from "@/utils/format"
+import { ordenar_planes_paciente } from "@/utils/planes"
 import { isNotImplemented } from "@/utils/errors"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
@@ -32,6 +33,8 @@ import type {
   RequerimientoNutricional,
 } from "@/types/patient"
 import type { Planificacion } from "@/types/mealPlan"
+
+const PLANES_VISIBLES = 3
 
 function calcularEdad(fechaNacimiento: string): number {
   const nacimiento = new Date(fechaNacimiento)
@@ -65,6 +68,7 @@ export default function PatientDetail() {
 
   const [planes, setPlanes] = useState<Planificacion[]>([])
   const [loadingPlanes, setLoadingPlanes] = useState(true)
+  const [ver_todos_planes, set_ver_todos_planes] = useState(false)
 
   const [mediciones, set_mediciones] = useState<Medicion[] | null>(null)
   const [requerimientos, set_requerimientos] = useState<
@@ -239,6 +243,11 @@ export default function PatientDetail() {
     )
   }
 
+  const planes_ordenados = ordenar_planes_paciente(planes)
+  const planes_visibles = ver_todos_planes
+    ? planes_ordenados
+    : planes_ordenados.slice(0, PLANES_VISIBLES)
+
   return (
     <div className="max-w-2xl space-y-6">
       <Button
@@ -406,7 +415,7 @@ export default function PatientDetail() {
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : (
           <Card className="divide-y divide-border">
-            {planes.map((plan) => (
+            {planes_visibles.map((plan) => (
               <Link
                 key={plan.id_planificacion}
                 to={`/planificacion/${plan.id_planificacion}`}
@@ -429,6 +438,15 @@ export default function PatientDetail() {
               </p>
             )}
           </Card>
+        )}
+        {!loadingPlanes && planes.length > PLANES_VISIBLES && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => set_ver_todos_planes((v) => !v)}
+          >
+            {ver_todos_planes ? "Ver menos resultados" : "Ver todos"}
+          </Button>
         )}
       </div>
     </div>

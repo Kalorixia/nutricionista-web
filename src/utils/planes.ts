@@ -66,3 +66,20 @@ export function iniciales(nombre: string): string {
       .join("") || "?"
   )
 }
+
+/**
+ * Planes de un paciente para su ficha: el publicado primero y después del más
+ * reciente al más antiguo. Devuelve una copia.
+ */
+export function ordenar_planes_paciente(
+  planes: Planificacion[]
+): Planificacion[] {
+  const publicada = (plan: Planificacion) =>
+    plan.estado === "publicada" ? 0 : 1
+  return [...planes].sort(
+    (a, b) =>
+      publicada(a) - publicada(b) ||
+      (b.created_at ?? "").localeCompare(a.created_at ?? "") ||
+      b.id_planificacion - a.id_planificacion
+  )
+}
