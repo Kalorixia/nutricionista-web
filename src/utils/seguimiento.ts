@@ -1,4 +1,26 @@
-import type { Planificacion } from "@/types/mealPlan"
+import type { EstadoRegistro, Planificacion } from "@/types/mealPlan"
+
+/** Etiqueta y clases de cada estado de una comida registrada. */
+export const ESTADO_REGISTRO: Record<
+  EstadoRegistro,
+  { label: string; clase: string }
+> = {
+  cumplida: {
+    label: "Cumplida",
+    clase:
+      "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
+  },
+  con_cambios: {
+    label: "Con cambios",
+    clase:
+      "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  },
+  no_cumplida: {
+    label: "No cumplida",
+    clase:
+      "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200",
+  },
+}
 
 /** "lun 5/10" a partir de "2026-10-05", sin correr de día por la zona horaria. */
 export function fecha_corta(iso: string, con_dia = true): string {

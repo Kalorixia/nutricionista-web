@@ -4,33 +4,18 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { mealPlansService } from "@/services/mealPlans.service"
-import { fecha_corta, plan_por_defecto } from "@/utils/seguimiento"
+import {
+  ESTADO_REGISTRO,
+  fecha_corta,
+  plan_por_defecto,
+} from "@/utils/seguimiento"
 import type {
   ConteoCumplimiento,
-  EstadoRegistro,
   Planificacion,
   Seguimiento,
 } from "@/types/mealPlan"
 
 const DIAS_VISIBLES = 14
-
-const ESTADO: Record<EstadoRegistro, { label: string; clase: string }> = {
-  cumplida: {
-    label: "Cumplida",
-    clase:
-      "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
-  },
-  con_cambios: {
-    label: "Con cambios",
-    clase:
-      "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
-  },
-  no_cumplida: {
-    label: "No cumplida",
-    clase:
-      "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200",
-  },
-}
 
 /**
  * Lo que el paciente registró sobre su plan (KAL-132-05): cumplimiento por
@@ -193,7 +178,7 @@ export function AdherenceCard({ planes }: { planes: Planificacion[] }) {
                         className={cn(
                           "rounded-md border px-2 py-0.5 text-xs",
                           comida.estado
-                            ? ESTADO[comida.estado].clase
+                            ? ESTADO_REGISTRO[comida.estado].clase
                             : "border-dashed border-border text-muted-foreground"
                         )}
                       >

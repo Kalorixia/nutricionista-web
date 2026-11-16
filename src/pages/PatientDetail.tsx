@@ -20,6 +20,7 @@ import { formatDate } from "@/utils/format"
 import { isNotImplemented } from "@/utils/errors"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
+import { ProgressCard } from "@/components/modules/patients/ProgressCard"
 import { AdherenceCard } from "@/components/modules/patients/AdherenceCard"
 import { MeasurementsCard } from "@/components/modules/patients/MeasurementsCard"
 import { RequirementsCard } from "@/components/modules/patients/RequirementsCard"
@@ -383,6 +384,12 @@ export default function PatientDetail() {
         onReintentar={refrescar_historial}
       />
       <ObservationsCard idPaciente={paciente.id_paciente} />
+
+      <ProgressCard
+        idPaciente={paciente.id_paciente}
+        idsPlanesPropios={planes.map((plan) => plan.id_planificacion)}
+        version={version_historial}
+      />
 
       {!loadingPlanes && (
         <AdherenceCard
