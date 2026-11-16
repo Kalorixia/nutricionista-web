@@ -14,6 +14,7 @@ export interface PacienteVinculado {
   nombre: string
   apellido: string
   fecha_inicio: string
+  foto_url: string | null
 }
 
 export interface PacienteDetalle {
@@ -29,6 +30,7 @@ export interface PacienteDetalle {
   condiciones_medicas: string[]
   restricciones_alimentarias: string[]
   fecha_inicio: string
+  foto_url: string | null
 }
 
 /** Objetivos nutricionales vigentes de un paciente. */

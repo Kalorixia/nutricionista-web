@@ -9,10 +9,10 @@ import {
   QrCode,
   Search,
   Unlink,
-  UserRound,
   Zap,
 } from "lucide-react"
 import { toast } from "sonner"
+import UserAvatar from "@/components/common/UserAvatar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -283,9 +283,11 @@ export default function Patients() {
           <Card className="divide-y divide-border">
             {pacientes.map((p) => (
               <div key={p.id_paciente} className="flex items-center gap-3 p-4">
-                <div className="rounded-full bg-secondary p-2">
-                  <UserRound className="h-4 w-4" />
-                </div>
+                <UserAvatar
+                  nombre={p.nombre}
+                  apellido={p.apellido}
+                  fotoUrl={p.foto_url}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">
                     {p.nombre} {p.apellido}

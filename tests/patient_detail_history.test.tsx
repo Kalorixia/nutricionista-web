@@ -75,6 +75,7 @@ const PACIENTE: PacienteDetalle = {
   condiciones_medicas: [],
   restricciones_alimentarias: [],
   fecha_inicio: "2026-09-01T10:00:00Z",
+  foto_url: null,
 }
 
 const CALCULO: CalculoNutricional = {

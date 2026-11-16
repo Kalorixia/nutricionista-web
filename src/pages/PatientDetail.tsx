@@ -9,6 +9,7 @@ import {
   Unlink,
 } from "lucide-react"
 import { toast } from "sonner"
+import UserAvatar from "@/components/common/UserAvatar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -260,13 +261,21 @@ export default function PatientDetail() {
       </Button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-brand-dark font-heading text-3xl font-bold">
-            {paciente.nombre} {paciente.apellido}
-          </h1>
-          <p className="text-muted-foreground">
-            Vinculado desde {formatDate(paciente.fecha_inicio)}
-          </p>
+        <div className="flex items-center gap-4">
+          <UserAvatar
+            nombre={paciente.nombre}
+            apellido={paciente.apellido}
+            fotoUrl={paciente.foto_url}
+            className="size-14 text-lg"
+          />
+          <div>
+            <h1 className="text-brand-dark font-heading text-3xl font-bold">
+              {paciente.nombre} {paciente.apellido}
+            </h1>
+            <p className="text-muted-foreground">
+              Vinculado desde {formatDate(paciente.fecha_inicio)}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button

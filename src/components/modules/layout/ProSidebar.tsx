@@ -20,7 +20,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import UserAvatar from "@/components/common/UserAvatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,11 +133,11 @@ export default function ProSidebar() {
               <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-secondary/50" />
             }
           >
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
-                {greetingName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              nombre={greetingName}
+              apellido={user?.apellido}
+              fotoUrl={user?.foto_url}
+            />
             {!collapsed && (
               <>
                 <span className="flex-1 truncate text-left text-sm font-medium text-foreground">

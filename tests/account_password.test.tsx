@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { toast } from "sonner"
+import { ConfirmProvider } from "@/components/common/ConfirmDialog"
 import Account from "@/pages/Account"
 import { authService } from "@/services/authService"
 import { nutritionistService } from "@/services/nutritionist.service"
@@ -41,7 +42,11 @@ beforeEach(() => {
 
 async function cambiarContrasena(newPassword: string) {
   const user = userEvent.setup()
-  render(<Account />)
+  render(
+    <ConfirmProvider>
+      <Account />
+    </ConfirmProvider>
+  )
   await user.type(screen.getByLabelText("Contraseña actual"), "Actual1234")
   await user.type(screen.getByLabelText("Contraseña nueva"), newPassword)
   await user.click(

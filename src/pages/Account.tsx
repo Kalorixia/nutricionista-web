@@ -1,8 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import UserAvatar from "@/components/common/UserAvatar"
+import { useConfirm } from "@/components/common/ConfirmDialog"
 import { PasswordInput } from "@/components/common/PasswordInput"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -27,7 +29,10 @@ const ESTADO_LABEL: Record<EstadoMatriculaDetalle["estado"], string> = {
 }
 
 export default function Account() {
-  const { user } = useAuth()
+  const { user, refreshMe } = useAuth()
+  const confirm = useConfirm()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
   const { disclaimer } = useDisclaimer()
   const [leyendo, setLeyendo] = useState(false)
   const [detalle, setDetalle] = useState<EstadoMatriculaDetalle | null>(null)
@@ -74,6 +79,40 @@ export default function Account() {
     }
   }
 
+  const handleFoto = async (file: File | undefined) => {
+    if (fileInput.current) fileInput.current.value = ""
+    if (!file) return
+    setSubiendoFoto(true)
+    try {
+      await nutritionistService.subirFoto(file)
+      await refreshMe()
+      toast.success("Foto de perfil actualizada")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
+  const handleQuitarFoto = async () => {
+    const ok = await confirm({
+      title: "Quitar foto de perfil",
+      description: "Se mostrarán tus iniciales en lugar de la foto.",
+      confirmText: "Quitar",
+    })
+    if (!ok) return
+    setSubiendoFoto(true)
+    try {
+      await nutritionistService.quitarFoto()
+      await refreshMe()
+      toast.success("Foto de perfil eliminada")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
   return (
     <div className="max-w-xl space-y-6">
       <div>
@@ -86,6 +125,43 @@ export default function Account() {
       </div>
 
       <Card className="space-y-3 p-5 text-sm">
+        <div className="flex items-center gap-4 pb-2">
+          <UserAvatar
+            nombre={user?.nombre ?? ""}
+            apellido={user?.apellido}
+            fotoUrl={user?.foto_url}
+            className="size-20 text-2xl"
+          />
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/jpeg,image/png"
+              hidden
+              aria-label="Archivo de foto de perfil"
+              onChange={(e) => void handleFoto(e.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={subiendoFoto}
+              onClick={() => fileInput.current?.click()}
+            >
+              {subiendoFoto && <Loader2 className="h-4 w-4 animate-spin" />}
+              {user?.foto_url ? "Cambiar foto" : "Subir foto"}
+            </Button>
+            {user?.foto_url && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={subiendoFoto}
+                onClick={() => void handleQuitarFoto()}
+              >
+                Quitar foto
+              </Button>
+            )}
+          </div>
+        </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Nombre</span>
           <span className="font-medium">

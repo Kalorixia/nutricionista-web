@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
+import { ConfirmProvider } from "@/components/common/ConfirmDialog"
 import Account from "@/pages/Account"
 import Pending from "@/pages/Pending"
 import { nutritionistService } from "@/services/nutritionist.service"
@@ -54,7 +55,11 @@ it("Account muestra versión y fecha de aceptación, y Leer abre el aviso", asyn
       ReturnType<typeof nutritionistService.estadoMatricula>
     >
   )
-  render(<Account />)
+  render(
+    <ConfirmProvider>
+      <Account />
+    </ConfirmProvider>
+  )
 
   expect(screen.getByText("Aviso médico")).toBeTruthy()
   expect(screen.getByText("Versión 1")).toBeTruthy()
