@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
+import { ApiError } from "@/services/http"
 import { Link } from "react-router-dom"
 import {
   Construction,
@@ -113,7 +114,12 @@ export default function Patients() {
       setViewingCodigo(codigo)
       await loadCodigos()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+      const message =
+        error instanceof Error ? error.message : "Ocurrió un error"
+      // Los 409 de límite de plan traen dos oraciones: más tiempo en pantalla.
+      if (error instanceof ApiError && error.status === 409)
+        toast.error(message, { duration: 10000 })
+      else toast.error(message)
     } finally {
       setGenerating(false)
     }

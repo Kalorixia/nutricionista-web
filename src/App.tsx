@@ -24,7 +24,6 @@ import Recipes from "@/pages/Recipes"
 import RecipeDetail from "@/pages/RecipeDetail"
 import Lists from "@/pages/Lists"
 import ListDetail from "@/pages/ListDetail"
-import Premium from "@/pages/Premium"
 import Account from "@/pages/Account"
 import Help from "@/pages/Help"
 
@@ -69,7 +68,6 @@ export function App() {
                       <Route path="recetas/:id" element={<RecipeDetail />} />
                       <Route path="listas" element={<Lists />} />
                       <Route path="listas/:id" element={<ListDetail />} />
-                      <Route path="suscripcion" element={<Premium />} />
                       <Route path="cuenta" element={<Account />} />
                       <Route path="ayuda" element={<Help />} />
                     </Route>

@@ -36,6 +36,11 @@ vi.mock("@/services/nutritionist.service", () => ({
   nutritionistService: { estadoMatricula: vi.fn() },
 }))
 vi.mock("@/services/authService", () => ({ authService: {} }))
+vi.mock("@/services/subscription.service", () => ({
+  subscriptionService: {
+    getMine: vi.fn().mockReturnValue(new Promise(() => {})),
+  },
+}))
 vi.mock("@/services/session", () => ({ getSessionToken: vi.fn() }))
 
 beforeEach(() => {

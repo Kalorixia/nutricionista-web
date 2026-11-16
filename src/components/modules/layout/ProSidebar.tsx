@@ -5,7 +5,6 @@ import {
   CalendarRange,
   BookOpen,
   ListChecks,
-  Crown,
   HelpCircle,
   ChevronDown,
   Leaf,
@@ -37,7 +36,6 @@ const items = [
   { title: "Planificación", url: "/planificacion", icon: CalendarRange },
   { title: "Recetas", url: "/recetas", icon: BookOpen },
   { title: "Listas", url: "/listas", icon: ListChecks },
-  { title: "Suscripción", url: "/suscripcion", icon: Crown },
 ]
 
 export default function ProSidebar() {

@@ -21,6 +21,11 @@ vi.mock("@/services/nutritionist.service", () => ({
 vi.mock("@/services/authService", () => ({
   authService: { changePassword: vi.fn() },
 }))
+vi.mock("@/services/subscription.service", () => ({
+  subscriptionService: {
+    getMine: vi.fn().mockReturnValue(new Promise(() => {})),
+  },
+}))
 vi.mock("@/services/session", () => ({ getSessionToken: vi.fn() }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 

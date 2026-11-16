@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/hooks/use-auth"
 import { useDisclaimer } from "@/hooks/use-disclaimer"
+import MyPlanCard from "@/components/modules/account/MyPlanCard"
 import DisclaimerDialog from "@/components/modules/disclaimer/DisclaimerDialog"
 import { formatDateTime } from "@/utils/format"
 import { authService } from "@/services/authService"
@@ -122,6 +123,8 @@ export default function Account() {
           )
         )}
       </Card>
+
+      <MyPlanCard />
 
       {disclaimer && (
         <Card className="space-y-3 p-5 text-sm">

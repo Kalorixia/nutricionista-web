@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { ApiError } from "@/services/http"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import {
   Archive,
@@ -224,7 +225,12 @@ export default function Planning() {
       if (plan) navigate(`/planificacion/${plan.id_planificacion}`)
       else await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+      const message =
+        error instanceof Error ? error.message : "Ocurrió un error"
+      // Los 409 de límite de plan traen dos oraciones: más tiempo en pantalla.
+      if (error instanceof ApiError && error.status === 409)
+        toast.error(message, { duration: 10000 })
+      else toast.error(message)
     } finally {
       setSaving(false)
       create_lock.current = false
