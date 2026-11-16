@@ -1,6 +1,16 @@
 import { DIAS_SEMANA, MOMENTOS_COMIDA } from "@/types/mealPlan"
 import type { PlanificacionDetalle } from "@/types/mealPlan"
 import type { RowInput } from "jspdf-autotable"
+import {
+  GRIS,
+  MARGEN,
+  VERDE,
+  cargar_jspdf,
+  formato_fecha,
+  linea_profesional,
+  nombre_archivo_pdf,
+  numerar_paginas,
+} from "@/utils/pdf_comun"
 
 /**
  * El plan en PDF (KAL-132-04). Este módulo arma el contenido; `dibujar` lo
@@ -41,9 +51,6 @@ export interface ContenidoPdf {
   nombre_archivo: string
 }
 
-const formato_fecha = (iso: string) =>
-  new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("es-AR")
-
 function periodo(plan: PlanificacionDetalle): string | null {
   if (plan.fecha_inicio && plan.fecha_fin)
     return `Del ${formato_fecha(plan.fecha_inicio)} al ${formato_fecha(plan.fecha_fin)}`
@@ -53,14 +60,10 @@ function periodo(plan: PlanificacionDetalle): string | null {
 }
 
 function nombre_archivo(plan: PlanificacionDetalle): string {
-  const base =
-    `${plan.nombre} ${plan.es_plantilla ? "plantilla" : plan.nombre_paciente}`
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/[^a-zA-Z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .toLowerCase()
-  return `${base || "plan"}.pdf`
+  return nombre_archivo_pdf(
+    `${plan.nombre} ${plan.es_plantilla ? "plantilla" : plan.nombre_paciente}`,
+    "plan"
+  )
 }
 
 export function contenido_pdf(
@@ -105,7 +108,7 @@ export function contenido_pdf(
 
   const objetivos = plan.objetivos_nutricionales
   const lineas = [
-    `Profesional: ${profesional.nombre}${profesional.matricula ? ` · Matrícula ${profesional.matricula}` : ""}`,
+    linea_profesional(profesional.nombre, profesional.matricula),
     plan.es_plantilla
       ? "Plantilla (sin paciente)"
       : `Paciente: ${plan.nombre_paciente}`,
@@ -130,16 +133,9 @@ export function contenido_pdf(
   }
 }
 
-const VERDE: [number, number, number] = [22, 101, 52]
-const GRIS: [number, number, number] = [100, 100, 100]
-const MARGEN = 15
-
 /** Dibuja el contenido en un A4. jsPDF se carga recién acá. */
 export async function generar_pdf(contenido: ContenidoPdf) {
-  const [{ jsPDF }, { autoTable }] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-  ])
+  const { jsPDF, autoTable } = await cargar_jspdf()
   const doc = new jsPDF({ format: "a4", unit: "mm" })
   const ancho = doc.internal.pageSize.getWidth()
   const util = ancho - MARGEN * 2
@@ -267,19 +263,10 @@ export async function generar_pdf(contenido: ContenidoPdf) {
     y = final_y()
   }
 
-  const paginas = doc.getNumberOfPages()
-  const alto = doc.internal.pageSize.getHeight()
-  for (let pagina = 1; pagina <= paginas; pagina += 1) {
-    doc.setPage(pagina)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(8)
-    doc.setTextColor(...GRIS)
-    const pie = `${contenido.borrador ? "BORRADOR · " : ""}Generado el ${new Date().toLocaleDateString("es-AR")} con Kalorixia`
-    doc.text(pie, MARGEN, alto - 8)
-    doc.text(`${pagina} / ${paginas}`, ancho - MARGEN, alto - 8, {
-      align: "right",
-    })
-  }
+  numerar_paginas(
+    doc,
+    `${contenido.borrador ? "BORRADOR · " : ""}Generado el ${new Date().toLocaleDateString("es-AR")} con Kalorixia`
+  )
 
   return doc
 }

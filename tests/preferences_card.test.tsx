@@ -18,6 +18,17 @@ it("avisa cuando el paciente todavía no respondió", () => {
   expect(screen.getByText(/todavía no contó sus preferencias/)).toBeTruthy()
 })
 
+it("aclara que las preferencias no reemplazan a las restricciones", () => {
+  render(
+    <PreferencesCard idPaciente={4} preferencias={null} onChange={vi.fn()} />
+  )
+  expect(
+    screen.getByText(
+      "Importante: Estas indicaciones sirven como guía para orientar las respuestas del Copiloto, pero no reemplazan ni modifican las restricciones establecidas."
+    )
+  ).toBeTruthy()
+})
+
 it("muestra lo que respondió el paciente", () => {
   render(
     <PreferencesCard

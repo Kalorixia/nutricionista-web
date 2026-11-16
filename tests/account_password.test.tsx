@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { toast } from "sonner"
+import { ConfirmProvider } from "@/components/common/ConfirmDialog"
 import Account from "@/pages/Account"
 import { authService } from "@/services/authService"
 import { nutritionistService } from "@/services/nutritionist.service"
@@ -12,11 +13,19 @@ vi.mock("@/hooks/use-auth", () => ({
     user: { nombre: "Ana", apellido: "Pérez", email: "ana@example.com" },
   }),
 }))
+vi.mock("@/hooks/use-disclaimer", () => ({
+  useDisclaimer: () => ({ disclaimer: null }),
+}))
 vi.mock("@/services/nutritionist.service", () => ({
   nutritionistService: { estadoMatricula: vi.fn() },
 }))
 vi.mock("@/services/authService", () => ({
   authService: { changePassword: vi.fn() },
+}))
+vi.mock("@/services/subscription.service", () => ({
+  subscriptionService: {
+    getMine: vi.fn().mockReturnValue(new Promise(() => {})),
+  },
 }))
 vi.mock("@/services/session", () => ({ getSessionToken: vi.fn() }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -33,7 +42,11 @@ beforeEach(() => {
 
 async function cambiarContrasena(newPassword: string) {
   const user = userEvent.setup()
-  render(<Account />)
+  render(
+    <ConfirmProvider>
+      <Account />
+    </ConfirmProvider>
+  )
   await user.type(screen.getByLabelText("Contraseña actual"), "Actual1234")
   await user.type(screen.getByLabelText("Contraseña nueva"), newPassword)
   await user.click(

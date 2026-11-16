@@ -13,6 +13,24 @@ export class ApiError extends Error {
 }
 
 /**
+ * 403 que el servidor manda mientras el usuario no aceptó el disclaimer
+ * vigente. Se reconoce por el header `X-Disclaimer-Requerido: true`, no por el
+ * texto: hay otros 403 de nutricionista ("Matrícula profesional no aprobada").
+ */
+export class DisclaimerRequiredError extends ApiError {
+  constructor(message: string) {
+    super(message, 403)
+    this.name = "DisclaimerRequiredError"
+  }
+}
+
+let disclaimerRequiredHandler: (() => void) | null = null
+
+export function setDisclaimerRequiredHandler(handler: (() => void) | null) {
+  disclaimerRequiredHandler = handler
+}
+
+/**
  * El backend manda `detail` como texto en sus errores de negocio, pero en un
  * 422 de validación de FastAPI es una lista de Pydantic con mensajes en
  * inglés. Esos no se muestran: se reemplazan por uno en español.
@@ -74,6 +92,13 @@ export async function apiFetch<T>(
       (data && typeof data === "object" && "detail" in data
         ? detailMessage((data as { detail: unknown }).detail)
         : null) ?? "Ocurrió un error inesperado"
+    if (
+      response.status === 403 &&
+      response.headers.get("X-Disclaimer-Requerido") === "true"
+    ) {
+      disclaimerRequiredHandler?.()
+      throw new DisclaimerRequiredError(detail)
+    }
     throw new ApiError(detail, response.status)
   }
 

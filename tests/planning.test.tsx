@@ -8,6 +8,7 @@ import Planning from "@/pages/Planning"
 import { ConfirmProvider } from "@/components/common/ConfirmDialog"
 import { GenerationsProvider } from "@/hooks/use-generations"
 import { mealPlansService } from "@/services/mealPlans.service"
+import { ApiError } from "@/services/http"
 import { patientsService } from "@/services/patients.service"
 
 vi.mock("@/services/mealPlans.service", () => ({
@@ -92,6 +93,20 @@ async function fillAndSubmit(user: UserEvent, label: string) {
   await user.type(screen.getByLabelText("Nombre del plan"), "Semana")
   await user.click(screen.getByRole("button", { name: label }))
 }
+
+it("un 409 de límite de plan se muestra con su detalle y más tiempo", async () => {
+  const user = userEvent.setup()
+  const detalle =
+    "Alcanzaste el límite de 20 borradores del Copiloto de este mes en tu plan Starter. El cupo se renueva el primer día del mes que viene; para ampliarlo, pedile al administrador un cambio de plan."
+  vi.mocked(mealPlansService.generate).mockRejectedValue(
+    new ApiError(detalle, 409)
+  )
+  mount()
+  await fillAndSubmit(user, "Generar con Copiloto")
+  await waitFor(() =>
+    expect(toast.error).toHaveBeenCalledWith(detalle, { duration: 10000 })
+  )
+})
 
 it("abre el borrador al crearlo a mano", async () => {
   const user = userEvent.setup()

@@ -2,14 +2,18 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { Toaster } from "sonner"
 import { useTheme } from "@/components/theme-provider"
 import { AuthProvider } from "@/hooks/use-auth"
+import { DisclaimerProvider } from "@/hooks/use-disclaimer"
 import { ConfirmProvider } from "@/components/common/ConfirmDialog"
 import RequireAuth from "@/routes/RequireAuth"
+import RequireDisclaimer from "@/routes/RequireDisclaimer"
 import RequireApprovedNutritionist from "@/routes/RequireApprovedNutritionist"
 import ProLayout from "@/components/modules/layout/ProLayout"
 import Login from "@/pages/Login"
 import Signup from "@/pages/Signup"
+import ForgotPassword from "@/pages/ForgotPassword"
 import VerifyEmail from "@/pages/VerifyEmail"
 import Pending from "@/pages/Pending"
+import Disclaimer from "@/pages/Disclaimer"
 import NotFound from "@/pages/NotFound"
 import Dashboard from "@/pages/Dashboard"
 import Patients from "@/pages/Patients"
@@ -20,7 +24,6 @@ import Recipes from "@/pages/Recipes"
 import RecipeDetail from "@/pages/RecipeDetail"
 import Lists from "@/pages/Lists"
 import ListDetail from "@/pages/ListDetail"
-import Premium from "@/pages/Premium"
 import Account from "@/pages/Account"
 import Help from "@/pages/Help"
 
@@ -33,37 +36,49 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ConfirmProvider>
-          <AppToaster />
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/verificar-email" element={<VerifyEmail />} />
+        <DisclaimerProvider>
+          <ConfirmProvider>
+            <AppToaster />
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route
+                path="/recuperar-contrasena"
+                element={<ForgotPassword />}
+              />
+              <Route path="/verificar-email" element={<VerifyEmail />} />
 
-            <Route element={<RequireAuth />}>
-              <Route path="/pendiente" element={<Pending />} />
+              <Route element={<RequireAuth />}>
+                <Route path="/disclaimer" element={<Disclaimer />} />
 
-              <Route element={<RequireApprovedNutritionist />}>
-                <Route element={<ProLayout />}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="pacientes" element={<Patients />} />
-                  <Route path="pacientes/:id" element={<PatientDetail />} />
-                  <Route path="planificacion" element={<Planning />} />
-                  <Route path="planificacion/:id" element={<PlanEditor />} />
-                  <Route path="recetas" element={<Recipes />} />
-                  <Route path="recetas/:id" element={<RecipeDetail />} />
-                  <Route path="listas" element={<Lists />} />
-                  <Route path="listas/:id" element={<ListDetail />} />
-                  <Route path="suscripcion" element={<Premium />} />
-                  <Route path="cuenta" element={<Account />} />
-                  <Route path="ayuda" element={<Help />} />
+                <Route element={<RequireDisclaimer />}>
+                  <Route path="/pendiente" element={<Pending />} />
+
+                  <Route element={<RequireApprovedNutritionist />}>
+                    <Route element={<ProLayout />}>
+                      <Route index element={<Dashboard />} />
+                      <Route path="pacientes" element={<Patients />} />
+                      <Route path="pacientes/:id" element={<PatientDetail />} />
+                      <Route path="planificacion" element={<Planning />} />
+                      <Route
+                        path="planificacion/:id"
+                        element={<PlanEditor />}
+                      />
+                      <Route path="recetas" element={<Recipes />} />
+                      <Route path="recetas/:id" element={<RecipeDetail />} />
+                      <Route path="listas" element={<Lists />} />
+                      <Route path="listas/:id" element={<ListDetail />} />
+                      <Route path="cuenta" element={<Account />} />
+                      <Route path="ayuda" element={<Help />} />
+                    </Route>
+                  </Route>
                 </Route>
               </Route>
-            </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </ConfirmProvider>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ConfirmProvider>
+        </DisclaimerProvider>
       </AuthProvider>
     </BrowserRouter>
   )

@@ -9,6 +9,7 @@ import {
   Unlink,
 } from "lucide-react"
 import { toast } from "sonner"
+import UserAvatar from "@/components/common/UserAvatar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,9 +18,11 @@ import { ApiError } from "@/services/http"
 import { patientsService } from "@/services/patients.service"
 import { mealPlansService } from "@/services/mealPlans.service"
 import { formatDate } from "@/utils/format"
+import { ordenar_planes_paciente } from "@/utils/planes"
 import { isNotImplemented } from "@/utils/errors"
 import { ClinicalProfileCard } from "@/components/modules/patients/ClinicalProfileCard"
 import { PreferencesCard } from "@/components/modules/patients/PreferencesCard"
+import { ProgressCard } from "@/components/modules/patients/ProgressCard"
 import { AdherenceCard } from "@/components/modules/patients/AdherenceCard"
 import { MeasurementsCard } from "@/components/modules/patients/MeasurementsCard"
 import { RequirementsCard } from "@/components/modules/patients/RequirementsCard"
@@ -31,6 +34,8 @@ import type {
   RequerimientoNutricional,
 } from "@/types/patient"
 import type { Planificacion } from "@/types/mealPlan"
+
+const PLANES_VISIBLES = 3
 
 function calcularEdad(fechaNacimiento: string): number {
   const nacimiento = new Date(fechaNacimiento)
@@ -64,6 +69,7 @@ export default function PatientDetail() {
 
   const [planes, setPlanes] = useState<Planificacion[]>([])
   const [loadingPlanes, setLoadingPlanes] = useState(true)
+  const [ver_todos_planes, set_ver_todos_planes] = useState(false)
 
   const [mediciones, set_mediciones] = useState<Medicion[] | null>(null)
   const [requerimientos, set_requerimientos] = useState<
@@ -238,6 +244,11 @@ export default function PatientDetail() {
     )
   }
 
+  const planes_ordenados = ordenar_planes_paciente(planes)
+  const planes_visibles = ver_todos_planes
+    ? planes_ordenados
+    : planes_ordenados.slice(0, PLANES_VISIBLES)
+
   return (
     <div className="max-w-2xl space-y-6">
       <Button
@@ -250,13 +261,22 @@ export default function PatientDetail() {
       </Button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-brand-dark font-heading text-3xl font-bold">
-            {paciente.nombre} {paciente.apellido}
-          </h1>
-          <p className="text-muted-foreground">
-            Vinculado desde {formatDate(paciente.fecha_inicio)}
-          </p>
+        <div className="flex items-center gap-4">
+          <UserAvatar
+            nombre={paciente.nombre}
+            apellido={paciente.apellido}
+            fotoUrl={paciente.foto_url}
+            className="size-14 text-lg"
+            ampliable
+          />
+          <div>
+            <h1 className="text-brand-dark font-heading text-3xl font-bold">
+              {paciente.nombre} {paciente.apellido}
+            </h1>
+            <p className="text-muted-foreground">
+              Vinculado desde {formatDate(paciente.fecha_inicio)}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button
@@ -384,6 +404,12 @@ export default function PatientDetail() {
       />
       <ObservationsCard idPaciente={paciente.id_paciente} />
 
+      <ProgressCard
+        idPaciente={paciente.id_paciente}
+        idsPlanesPropios={planes.map((plan) => plan.id_planificacion)}
+        version={version_historial}
+      />
+
       {!loadingPlanes && (
         <AdherenceCard
           key={planes.map((plan) => plan.id_planificacion).join(",")}
@@ -399,7 +425,7 @@ export default function PatientDetail() {
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : (
           <Card className="divide-y divide-border">
-            {planes.map((plan) => (
+            {planes_visibles.map((plan) => (
               <Link
                 key={plan.id_planificacion}
                 to={`/planificacion/${plan.id_planificacion}`}
@@ -422,6 +448,15 @@ export default function PatientDetail() {
               </p>
             )}
           </Card>
+        )}
+        {!loadingPlanes && planes.length > PLANES_VISIBLES && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => set_ver_todos_planes((v) => !v)}
+          >
+            {ver_todos_planes ? "Ver menos resultados" : "Ver todos"}
+          </Button>
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
+import { ApiError } from "@/services/http"
 import { Link } from "react-router-dom"
 import {
   Construction,
@@ -8,10 +9,10 @@ import {
   QrCode,
   Search,
   Unlink,
-  UserRound,
   Zap,
 } from "lucide-react"
 import { toast } from "sonner"
+import UserAvatar from "@/components/common/UserAvatar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -67,7 +68,7 @@ export default function Patients() {
   const loadCodigos = async () => {
     setLoadingCodigos(true)
     try {
-      setCodigos(await patientsService.listarCodigos())
+      setCodigos(await patientsService.listarCodigos("activo"))
       setCodigosDev(false)
     } catch (error) {
       if (isNotImplemented(error)) setCodigosDev(true)
@@ -113,7 +114,12 @@ export default function Patients() {
       setViewingCodigo(codigo)
       await loadCodigos()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ocurrió un error")
+      const message =
+        error instanceof Error ? error.message : "Ocurrió un error"
+      // Los 409 de límite de plan traen dos oraciones: más tiempo en pantalla.
+      if (error instanceof ApiError && error.status === 409)
+        toast.error(message, { duration: 10000 })
+      else toast.error(message)
     } finally {
       setGenerating(false)
     }
@@ -157,7 +163,6 @@ export default function Patients() {
   }
 
   const codigosActivos = codigos.filter((c) => c.estado === "activo")
-  const codigosHistorial = codigos.filter((c) => c.estado !== "activo")
 
   return (
     <div className="space-y-8">
@@ -170,7 +175,11 @@ export default function Patients() {
             Generá un código para que un paciente se vincule a tu perfil.
           </p>
         </div>
-        <Button onClick={handleGenerar} disabled={generating} className="gap-1.5">
+        <Button
+          onClick={handleGenerar}
+          disabled={generating}
+          className="gap-1.5"
+        >
           {generating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -189,8 +198,8 @@ export default function Patients() {
         ) : codigosDev ? (
           <Card>
             <EnDesarrollo>
-              La generación de códigos de vinculación todavía está en
-              desarrollo en el backend.
+              La generación de códigos de vinculación todavía está en desarrollo
+              en el backend.
             </EnDesarrollo>
           </Card>
         ) : (
@@ -239,27 +248,6 @@ export default function Patients() {
             )}
           </Card>
         )}
-
-        {codigosHistorial.length > 0 && (
-          <details className="text-sm text-muted-foreground">
-            <summary className="cursor-pointer select-none">
-              Ver historial de códigos ({codigosHistorial.length})
-            </summary>
-            <Card className="mt-2 divide-y divide-border">
-              {codigosHistorial.map((c) => (
-                <div
-                  key={c.id_codigo}
-                  className="flex items-center gap-3 p-3 text-xs"
-                >
-                  <span className="font-mono tracking-widest">{c.codigo}</span>
-                  <Badge variant={ESTADO_VARIANT[c.estado]}>
-                    {ESTADO_LABEL[c.estado]}
-                  </Badge>
-                </div>
-              ))}
-            </Card>
-          </details>
-        )}
       </section>
 
       <section className="space-y-3">
@@ -287,17 +275,20 @@ export default function Patients() {
         ) : pacientesDev ? (
           <Card>
             <EnDesarrollo>
-              La lista de pacientes vinculados todavía está en desarrollo en
-              el backend.
+              La lista de pacientes vinculados todavía está en desarrollo en el
+              backend.
             </EnDesarrollo>
           </Card>
         ) : (
           <Card className="divide-y divide-border">
             {pacientes.map((p) => (
               <div key={p.id_paciente} className="flex items-center gap-3 p-4">
-                <div className="rounded-full bg-secondary p-2">
-                  <UserRound className="h-4 w-4" />
-                </div>
+                <UserAvatar
+                  nombre={p.nombre}
+                  apellido={p.apellido}
+                  fotoUrl={p.foto_url}
+                  ampliable
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">
                     {p.nombre} {p.apellido}

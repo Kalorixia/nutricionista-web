@@ -15,6 +15,7 @@ import type {
   Observacion,
   CrearObservacionInput,
 } from "@/types/patient"
+import type { HistorialProgreso, ReporteProgreso } from "@/types/progreso"
 
 interface ListaCodigosResponse {
   codigos: CodigoVinculacion[]
@@ -158,6 +159,32 @@ export const patientsService = {
       `/nutricionistas/me/pacientes${query}`
     )
     return { pacientes, total }
+  },
+
+  /** Historial de progreso cruzando planes, de la semana más reciente hacia atrás (KAL-87). */
+  obtenerProgreso(
+    idPaciente: number,
+    { limit, offset }: { limit: number; offset: number }
+  ): Promise<HistorialProgreso> {
+    const search = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    })
+    return authedFetch<HistorialProgreso>(
+      `/nutricionistas/me/pacientes/${idPaciente}/progreso?${search.toString()}`
+    )
+  },
+
+  /** Datos del reporte de un período (`YYYY-MM-DD`, inclusive) para armar el PDF. */
+  obtenerReporte(
+    idPaciente: number,
+    desde: string,
+    hasta: string
+  ): Promise<ReporteProgreso> {
+    const search = new URLSearchParams({ desde, hasta })
+    return authedFetch<ReporteProgreso>(
+      `/nutricionistas/me/pacientes/${idPaciente}/progreso/reporte?${search.toString()}`
+    )
   },
 
   obtenerPaciente(idPaciente: number): Promise<PacienteDetalle> {

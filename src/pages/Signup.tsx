@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/common/PasswordInput"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -174,9 +175,8 @@ export default function Signup() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="password">Contraseña</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={8}
@@ -186,9 +186,8 @@ export default function Signup() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password-confirm">Repetir contraseña</Label>
-              <Input
+              <PasswordInput
                 id="password-confirm"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={8}

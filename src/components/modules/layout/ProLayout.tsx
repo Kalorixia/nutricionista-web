@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom"
 import { LogOut } from "lucide-react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/common/ThemeToggle"
 import ProSidebar from "@/components/modules/layout/ProSidebar"
 import { GenerationsIndicator } from "@/components/modules/plans/GenerationsIndicator"
 import { useConfirmedSignOut } from "@/hooks/use-confirmed-sign-out"
@@ -23,14 +24,17 @@ export default function ProLayout() {
               <div className="min-w-0 flex-1">
                 <GenerationsIndicator />
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleSignOut}
-                className="gap-1.5 rounded-full text-muted-foreground"
-              >
-                <LogOut className="h-4 w-4" /> Salir
-              </Button>
+              <div className="flex items-center gap-1">
+                <ThemeToggle />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSignOut}
+                  className="gap-1.5 rounded-full text-muted-foreground"
+                >
+                  <LogOut className="h-4 w-4" /> Salir
+                </Button>
+              </div>
             </header>
             <main className="flex-1 p-4 sm:p-6 md:p-8">
               <div className="page-shell">

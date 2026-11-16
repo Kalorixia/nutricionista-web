@@ -34,8 +34,8 @@ export function ClinicalProfileCard({
   const [kcal, set_kcal] = useState("")
 
   const calculo = perfil.calculo_nutricional
-  const prescritos = calculo?.prescrito_por_profesional ?? []
-  const kcal_prescritas = prescritos.includes("get_objetivo_kcal")
+  const kcal_prescritas =
+    calculo?.prescrito_por_profesional?.includes("get_objetivo_kcal") ?? false
   const sugerido = calculo?.calculado?.get_objetivo_kcal
   // Un objetivo propio no tiene fórmula: el paciente queda sin energía
   // objetivo hasta que el profesional la prescribe (KAL-131-06).
@@ -131,15 +131,12 @@ export function ClinicalProfileCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-medium">Objetivos nutricionales</h3>
-            {kcal_prescritas ? (
-              <p className="text-xs text-muted-foreground">
-                Los fijaste vos. Se mantienen aunque el paciente cambie su peso.
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Calculados automáticamente a partir del perfil.
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Recuerda: Los datos nutricionales se calculan automáticamente en
+              función de la información proporcionada por el paciente. Sin
+              embargo, pueden modificarse manualmente según las necesidades y el
+              criterio profesional.
+            </p>
           </div>
           {editando === null && puede_prescribir && (
             <Button
@@ -148,7 +145,7 @@ export function ClinicalProfileCard({
               onClick={abrir_objetivo}
               className="gap-1.5"
             >
-              <Pencil className="h-3.5 w-3.5" /> Prescribir
+              <Pencil className="h-3.5 w-3.5" /> Editar
             </Button>
           )}
         </div>
@@ -156,7 +153,7 @@ export function ClinicalProfileCard({
         {!calculo && editando !== "objetivo" && (
           <p className="mt-2 text-sm text-muted-foreground">
             {objetivo_propio && datos_completos
-              ? "El paciente eligió un objetivo propio, que no tiene fórmula. Prescribí la energía para calcular sus macros; mientras tanto, el Copiloto genera sin objetivo energético."
+              ? "El paciente eligió un objetivo propio, que no tiene fórmula. Editá la energía para calcular sus macros; mientras tanto, el Copiloto genera sin objetivo energético."
               : "Faltan datos físicos del paciente para calcular sus objetivos."}
           </p>
         )}
@@ -217,7 +214,6 @@ export function ClinicalProfileCard({
             <Dato
               etiqueta="Energía"
               valor={`${Math.round(calculo.get_objetivo_kcal)} kcal`}
-              prescrito={kcal_prescritas}
               sugerido={
                 kcal_prescritas && sugerido != null
                   ? `${Math.round(sugerido)} kcal`
@@ -227,17 +223,14 @@ export function ClinicalProfileCard({
             <Dato
               etiqueta="Proteínas"
               valor={`${Math.round(calculo.proteinas_g)} g`}
-              prescrito={prescritos.includes("proteinas_g")}
             />
             <Dato
               etiqueta="Carbohidratos"
               valor={`${Math.round(calculo.carbohidratos_g)} g`}
-              prescrito={prescritos.includes("carbohidratos_g")}
             />
             <Dato
               etiqueta="Grasas"
               valor={`${Math.round(calculo.grasas_g)} g`}
-              prescrito={prescritos.includes("grasas_g")}
             />
           </dl>
         )}
@@ -267,25 +260,16 @@ export function ClinicalProfileCard({
 function Dato({
   etiqueta,
   valor,
-  prescrito,
   sugerido,
 }: {
   etiqueta: string
   valor: string | null
-  prescrito?: boolean
   sugerido?: string | null
 }) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{etiqueta}</dt>
-      <dd className="font-medium tabular-nums">
-        {valor ?? "—"}
-        {prescrito && (
-          <span className="ml-1.5 text-xs font-normal text-primary">
-            prescrito
-          </span>
-        )}
-      </dd>
+      <dd className="font-medium tabular-nums">{valor ?? "—"}</dd>
       {sugerido && (
         <dd className="text-xs text-muted-foreground">
           la fórmula sugiere {sugerido}

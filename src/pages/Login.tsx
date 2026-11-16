@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Loader2, Lock, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/common/PasswordInput"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -87,15 +88,22 @@ export default function Login() {
             <Label htmlFor="password">Contraseña</Label>
             <div className="relative">
               <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-9"
               />
+            </div>
+            <div className="text-right">
+              <Link
+                to="/recuperar-contrasena"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Olvidé mi contraseña
+              </Link>
             </div>
           </div>
 

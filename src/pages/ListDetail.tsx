@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ChefHat,
   Clock,
+  Download,
   Loader2,
   Plus,
   Search,
@@ -19,6 +20,7 @@ import { useConfirm } from "@/components/common/ConfirmDialog"
 import { recipeListsService } from "@/services/recipeLists.service"
 import { recipesService } from "@/services/recipes.service"
 import type { ListaRecetaDetalle, RecetaListItem } from "@/types/recipe"
+import { contenido_lista, descargar_lista_pdf } from "@/utils/lista_pdf"
 
 const SEARCH_DEBOUNCE_MS = 350
 const SEARCH_LIMIT = 8
@@ -31,6 +33,7 @@ export default function ListDetail() {
   const [detail, setDetail] = useState<ListaRecetaDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const [adding, setAdding] = useState(false)
   const [query, setQuery] = useState("")
@@ -110,6 +113,18 @@ export default function ListDetail() {
     }
   }
 
+  const handleDownload = async () => {
+    if (!detail) return
+    setDownloading(true)
+    try {
+      await descargar_lista_pdf(contenido_lista(detail))
+    } catch {
+      toast.error("No se pudo generar el PDF. Intentá de nuevo.")
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const handleDeleteList = async () => {
     if (!detail) return
     const ok = await confirm({
@@ -165,6 +180,19 @@ export default function ListDetail() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="gap-1.5"
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}{" "}
+            Descargar PDF
+          </Button>
           <Button onClick={() => setAdding(true)} className="gap-1.5">
             <Plus className="h-4 w-4" /> Agregar recetas
           </Button>

@@ -134,11 +134,20 @@ describe("Perfil clínico editable por el profesional", () => {
 
   it("muestra el objetivo como calculado cuando nadie lo prescribió", () => {
     render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
-    expect(screen.getByText(/Calculados automáticamente/)).toBeTruthy()
+    expect(screen.getByText(/se calculan automáticamente/)).toBeTruthy()
     expect(screen.queryByText("prescrito")).toBeNull()
   })
 
-  it("marca lo prescrito y muestra al lado lo que sugeriría la fórmula", () => {
+  it("muestra la leyenda de que los datos se pueden modificar", () => {
+    render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
+    expect(
+      screen.getByText(
+        "Recuerda: Los datos nutricionales se calculan automáticamente en función de la información proporcionada por el paciente. Sin embargo, pueden modificarse manualmente según las necesidades y el criterio profesional."
+      )
+    ).toBeTruthy()
+  })
+
+  it("muestra lo prescrito sin rótulo y muestra al lado lo que sugeriría la fórmula", () => {
     render(
       <ClinicalProfileCard
         perfil={perfil({
@@ -153,9 +162,9 @@ describe("Perfil clínico editable por el profesional", () => {
       />
     )
     expect(screen.getByText("2400 kcal")).toBeTruthy()
-    expect(screen.getByText("prescrito")).toBeTruthy()
+    expect(screen.queryByText("prescrito")).toBeNull()
     expect(screen.getByText(/la fórmula sugiere 2044 kcal/)).toBeTruthy()
-    expect(screen.getByText(/aunque el paciente cambie su peso/)).toBeTruthy()
+    expect(screen.queryByText(/aunque el paciente cambie su peso/)).toBeNull()
   })
 
   it("prescribe un objetivo y lo borra con el campo vacío", async () => {
@@ -163,7 +172,7 @@ describe("Perfil clínico editable por el profesional", () => {
     vi.mocked(patientsService.prescribirObjetivo).mockResolvedValue(perfil())
     render(<ClinicalProfileCard perfil={perfil()} onChange={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: /Prescribir/ }))
+    await user.click(screen.getByRole("button", { name: "Editar" }))
     const kcal = screen.getByLabelText("Energía diaria (kcal)")
     await user.clear(kcal)
     await user.type(kcal, "2400")
@@ -174,7 +183,7 @@ describe("Perfil clínico editable por el profesional", () => {
       })
     )
 
-    await user.click(screen.getByRole("button", { name: /Prescribir/ }))
+    await user.click(screen.getByRole("button", { name: "Editar" }))
     await user.clear(screen.getByLabelText("Energía diaria (kcal)"))
     await user.click(screen.getByRole("button", { name: "Guardar" }))
     await waitFor(() =>
@@ -193,7 +202,7 @@ describe("Perfil clínico editable por el profesional", () => {
       />
     )
     expect(screen.getByText(/Faltan datos físicos/)).toBeTruthy()
-    expect(screen.queryByRole("button", { name: /Prescribir/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Editar" })).toBeNull()
   })
 
   it("con un objetivo propio y sin energía, muestra el objetivo y deja prescribirla", async () => {
@@ -213,7 +222,7 @@ describe("Perfil clínico editable por el profesional", () => {
     expect(
       screen.getByText(/objetivo propio, que no tiene fórmula/)
     ).toBeTruthy()
-    await user.click(screen.getByRole("button", { name: /Prescribir/ }))
+    await user.click(screen.getByRole("button", { name: "Editar" }))
     await user.type(screen.getByLabelText("Energía diaria (kcal)"), "2600")
     await user.click(screen.getByRole("button", { name: /Guardar/ }))
     await waitFor(() =>

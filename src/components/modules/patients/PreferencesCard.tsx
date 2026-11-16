@@ -140,7 +140,9 @@ export function PreferencesCard({
         <div>
           <h2 className="font-heading text-lg font-semibold">Preferencias</h2>
           <p className="text-xs text-muted-foreground">
-            Orientan al Copiloto; no reemplazan a las restricciones.
+            Importante: Estas indicaciones sirven como guía para orientar las
+            respuestas del Copiloto, pero no reemplazan ni modifican las
+            restricciones establecidas.
           </p>
         </div>
         {!editando && (
