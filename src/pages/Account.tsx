@@ -131,6 +131,7 @@ export default function Account() {
             apellido={user?.apellido}
             fotoUrl={user?.foto_url}
             className="size-20 text-2xl"
+            ampliable
           />
           <div className="flex flex-wrap gap-2">
             <input

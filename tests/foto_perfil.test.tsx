@@ -113,3 +113,24 @@ it("en Account, una subida exitosa llama a refreshMe", async () => {
   await waitFor(() => expect(refreshMe).toHaveBeenCalledTimes(1))
   expect(toast.success).toHaveBeenCalled()
 })
+
+it("UserAvatar ampliable abre la foto en grande", async () => {
+  const user = userEvent.setup()
+  render(
+    <UserAvatar
+      nombre="Ana"
+      apellido="Pérez"
+      fotoUrl="https://cdn.test/a.jpg"
+      ampliable
+    />
+  )
+  await user.click(
+    screen.getByRole("button", { name: "Ver la foto de Ana Pérez" })
+  )
+  expect(await screen.findByAltText("Foto de Ana Pérez")).toBeTruthy()
+})
+
+it("UserAvatar ampliable sin foto no es un botón", () => {
+  render(<UserAvatar nombre="Ana" apellido="Pérez" fotoUrl={null} ampliable />)
+  expect(screen.queryByRole("button")).toBeNull()
+})

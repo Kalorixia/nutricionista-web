@@ -267,6 +267,7 @@ export default function PatientDetail() {
             apellido={paciente.apellido}
             fotoUrl={paciente.foto_url}
             className="size-14 text-lg"
+            ampliable
           />
           <div>
             <h1 className="text-brand-dark font-heading text-3xl font-bold">

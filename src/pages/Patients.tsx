@@ -287,6 +287,7 @@ export default function Patients() {
                   nombre={p.nombre}
                   apellido={p.apellido}
                   fotoUrl={p.foto_url}
+                  ampliable
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">
